@@ -262,25 +262,25 @@ const RARITY_WEIGHT = {common:60, uncommon:30, rare:10};
 
 /* ============================= STORAGE ============================= */
 
-async function loadCards(){
+function loadCards(){
   try{
-    const r = await window.storage.get('cards', false);
-    if(r && r.value) return JSON.parse(r.value);
-  }catch(e){}
+    const value = localStorage.getItem('cards');
+    if(value) return JSON.parse(value);
+  }catch(e){ console.error(e); }
   return DEFAULT_CARDS;
 }
-async function saveCards(cards){
-  try{ await window.storage.set('cards', JSON.stringify(cards), false); }catch(e){ console.error(e); }
+function saveCards(cards){
+  try{ localStorage.setItem('cards', JSON.stringify(cards)); }catch(e){ console.error(e); }
 }
-async function loadSettings(){
+function loadSettings(){
   try{
-    const r = await window.storage.get('settings', false);
-    if(r && r.value) return Object.assign({}, DEFAULT_SETTINGS, JSON.parse(r.value));
-  }catch(e){}
+    const value = localStorage.getItem('settings');
+    if(value) return Object.assign({}, DEFAULT_SETTINGS, JSON.parse(value));
+  }catch(e){ console.error(e); }
   return {...DEFAULT_SETTINGS};
 }
-async function saveSettings(s){
-  try{ await window.storage.set('settings', JSON.stringify(s), false); }catch(e){ console.error(e); }
+function saveSettings(s){
+  try{ localStorage.setItem('settings', JSON.stringify(s)); }catch(e){ console.error(e); }
 }
 
 /* ============================= APP STATE ============================= */
