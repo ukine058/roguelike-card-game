@@ -195,120 +195,779 @@
 
 <script>
 (function(){
-'use strict';
 
-const STORAGE_KEYS={cards:'ashbound_codex_cards_v3',settings:'ashbound_codex_settings_v3'};
-const VERSION=3;
-function newId(){return 'c'+Math.random().toString(36).slice(2,10)}
-function clampInt(v,min,max,d=0){const n=parseInt(v,10);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):d}
-function qs(s,r){return (r||document).querySelector(s)}
-function qsa(s,r){return Array.from((r||document).querySelectorAll(s))}
-function app(){return qs('#app')}
-function el(html){const t=document.createElement('template');t.innerHTML=html.trim();return t.content.firstChild}
-function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+/* ============================= DATA MODEL ============================= */
 
-const DEFAULT_CARDS=[
-{id:'strike',name:'ストライク',type:'attack',cost:1,rarity:'basic',startingCount:4,damage:6,block:0,draw:0,energy:0,strength:0,metallicize:0,permanentStrength:0,permanentMetallicize:0,tempStrengthTurns:0,tempMetallicizeTurns:0,weak:0,weakTurns:0,vulnerable:0,vulnerableTurns:0,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:0,exhaust:false,target:'enemy',tags:'攻撃'},
-{id:'defend',name:'ディフェンド',type:'skill',cost:1,rarity:'basic',startingCount:5,damage:0,block:5,draw:0,energy:0,strength:0,metallicize:0,permanentStrength:0,permanentMetallicize:0,tempStrengthTurns:0,tempMetallicizeTurns:0,weak:0,weakTurns:0,vulnerable:0,vulnerableTurns:0,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:0,exhaust:false,target:'self',tags:'防御'},
-{id:'bash',name:'バッシュ',type:'attack',cost:2,rarity:'basic',startingCount:1,damage:8,block:0,draw:0,energy:0,strength:0,metallicize:0,permanentStrength:0,permanentMetallicize:0,tempStrengthTurns:0,tempMetallicizeTurns:0,weak:0,weakTurns:0,vulnerable:2,vulnerableTurns:2,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:0,exhaust:false,target:'enemy',tags:'攻撃,弱体'},
-{id:'heavyslash',name:'ヘヴィスラッシュ',type:'attack',cost:1,rarity:'common',startingCount:0,damage:9,block:0,draw:0,energy:0,strength:0,metallicize:0,permanentStrength:0,permanentMetallicize:0,tempStrengthTurns:0,tempMetallicizeTurns:0,weak:0,weakTurns:0,vulnerable:0,vulnerableTurns:0,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:0,exhaust:false,target:'enemy',tags:'攻撃'},
-{id:'ironwave',name:'アイアンウェイブ',type:'attack',cost:1,rarity:'common',startingCount:0,damage:5,block:5,draw:0,energy:0,strength:0,metallicize:0,permanentStrength:0,permanentMetallicize:0,tempStrengthTurns:0,tempMetallicizeTurns:0,weak:0,weakTurns:0,vulnerable:0,vulnerableTurns:0,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:0,exhaust:false,target:'enemy',tags:'攻撃,防御'},
-{id:'quickslice',name:'クイックスライス',type:'attack',cost:1,rarity:'common',startingCount:0,damage:7,block:0,draw:1,energy:0,strength:0,metallicize:0,permanentStrength:0,permanentMetallicize:0,tempStrengthTurns:0,tempMetallicizeTurns:0,weak:0,weakTurns:0,vulnerable:0,vulnerableTurns:0,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:0,exhaust:false,target:'enemy',tags:'攻撃,ドロー'},
-{id:'shrugitoff',name:'シュラグ・イットオフ',type:'skill',cost:1,rarity:'common',startingCount:0,damage:0,block:8,draw:1,energy:0,strength:0,metallicize:0,permanentStrength:0,permanentMetallicize:0,tempStrengthTurns:0,tempMetallicizeTurns:0,weak:0,weakTurns:0,vulnerable:0,vulnerableTurns:0,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:0,exhaust:false,target:'self',tags:'防御,ドロー'},
-{id:'poisonstab',name:'ポイズンスタブ',type:'attack',cost:1,rarity:'common',startingCount:0,damage:4,block:0,draw:0,energy:0,strength:0,metallicize:0,permanentStrength:0,permanentMetallicize:0,tempStrengthTurns:0,tempMetallicizeTurns:0,weak:0,weakTurns:0,vulnerable:0,vulnerableTurns:0,poison:3,poisonTurns:3,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:0,exhaust:false,target:'enemy',tags:'攻撃,毒'},
-{id:'focusmind',name:'フォーカスマインド',type:'skill',cost:1,rarity:'common',startingCount:0,damage:0,block:0,draw:2,energy:0,strength:0,metallicize:0,permanentStrength:0,permanentMetallicize:0,tempStrengthTurns:0,tempMetallicizeTurns:0,weak:0,weakTurns:0,vulnerable:0,vulnerableTurns:0,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:0,exhaust:false,target:'self',tags:'ドロー'},
-{id:'guardbreak',name:'ガードブレイク',type:'skill',cost:1,rarity:'common',startingCount:0,damage:0,block:3,draw:0,energy:0,strength:0,metallicize:0,permanentStrength:0,permanentMetallicize:0,tempStrengthTurns:0,tempMetallicizeTurns:0,weak:2,weakTurns:2,vulnerable:0,vulnerableTurns:0,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:0,exhaust:false,target:'enemy',tags:'弱体,防御'},
-{id:'adrenaline',name:'アドレナリン',type:'skill',cost:0,rarity:'uncommon',startingCount:0,damage:0,block:0,draw:1,energy:2,strength:0,metallicize:0,permanentStrength:0,permanentMetallicize:0,tempStrengthTurns:0,tempMetallicizeTurns:0,weak:0,weakTurns:0,vulnerable:0,vulnerableTurns:0,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:0,exhaust:true,target:'self',tags:'ドロー,エネルギー'},
-{id:'rampage',name:'ランページ',type:'attack',cost:2,rarity:'uncommon',startingCount:0,damage:16,block:0,draw:0,energy:0,strength:0,metallicize:0,permanentStrength:0,permanentMetallicize:0,tempStrengthTurns:0,tempMetallicizeTurns:0,weak:0,weakTurns:0,vulnerable:0,vulnerableTurns:0,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:0,exhaust:false,target:'enemy',tags:'攻撃'},
-{id:'bulwark',name:'バルワーク',type:'skill',cost:2,rarity:'uncommon',startingCount:0,damage:0,block:12,draw:0,energy:0,strength:0,metallicize:0,permanentStrength:0,permanentMetallicize:0,tempStrengthTurns:0,tempMetallicizeTurns:0,weak:0,weakTurns:0,vulnerable:0,vulnerableTurns:0,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:0,exhaust:false,target:'self',tags:'防御'},
-{id:'inflame',name:'インフレイム',type:'power',cost:1,rarity:'uncommon',startingCount:0,damage:0,block:0,draw:0,energy:0,strength:0,metallicize:0,permanentStrength:2,permanentMetallicize:0,tempStrengthTurns:0,tempMetallicizeTurns:0,weak:0,weakTurns:0,vulnerable:0,vulnerableTurns:0,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:0,exhaust:true,target:'self',tags:'パワー,永続'},
-{id:'ironskin',name:'アイアンスキン',type:'power',cost:1,rarity:'uncommon',startingCount:0,damage:0,block:0,draw:0,energy:0,strength:0,metallicize:0,permanentStrength:0,permanentMetallicize:3,tempStrengthTurns:0,tempMetallicizeTurns:0,weak:0,weakTurns:0,vulnerable:0,vulnerableTurns:0,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:0,exhaust:true,target:'self',tags:'パワー,永続'},
-{id:'demonform',name:'デーモンフォーム',type:'power',cost:3,rarity:'rare',startingCount:0,damage:0,block:0,draw:0,energy:0,strength:3,metallicize:0,permanentStrength:0,permanentMetallicize:0,tempStrengthTurns:999,tempMetallicizeTurns:0,weak:0,weakTurns:0,vulnerable:0,vulnerableTurns:0,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:0,exhaust:true,target:'self',tags:'パワー'},
-{id:'bloodletting',name:'ブラッドレッティング',type:'skill',cost:0,rarity:'rare',startingCount:0,damage:0,block:0,draw:3,energy:1,strength:0,metallicize:0,permanentStrength:0,permanentMetallicize:0,tempStrengthTurns:0,tempMetallicizeTurns:0,weak:0,weakTurns:0,vulnerable:0,vulnerableTurns:0,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,heal:0,loseHp:3,exhaust:true,target:'self',tags:'ドロー,代償'}
+function newId(){ return 'c' + Math.random().toString(36).slice(2,10); }
+
+const DEFAULT_CARDS = [
+  {id:'strike', name:'ストライク', type:'attack', cost:1, rarity:'basic', startingCount:4,
+    damage:6, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'defend', name:'ディフェンド', type:'skill', cost:1, rarity:'basic', startingCount:5,
+    damage:0, block:5, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'bash', name:'バッシュ', type:'attack', cost:2, rarity:'basic', startingCount:1,
+    damage:8, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:2, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'heavyslash', name:'ヘヴィスラッシュ', type:'attack', cost:1, rarity:'common', startingCount:0,
+    damage:9, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'ironwave', name:'アイアンウェイブ', type:'attack', cost:1, rarity:'common', startingCount:0,
+    damage:5, block:5, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'quickslice', name:'クイックスライス', type:'attack', cost:1, rarity:'common', startingCount:0,
+    damage:7, block:0, draw:1, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'shrugitoff', name:'シュラグ・イットオフ', type:'skill', cost:1, rarity:'common', startingCount:0,
+    damage:0, block:8, draw:1, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'poisonstab', name:'ポイズンスタブ', type:'attack', cost:1, rarity:'common', startingCount:0,
+    damage:4, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:3, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'focusmind', name:'フォーカスマインド', type:'skill', cost:1, rarity:'common', startingCount:0,
+    damage:0, block:0, draw:2, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'guardbreak', name:'ガードブレイク', type:'skill', cost:1, rarity:'common', startingCount:0,
+    damage:0, block:3, draw:0, energy:0, strength:0, weak:2, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'adrenaline', name:'アドレナリン', type:'skill', cost:0, rarity:'uncommon', startingCount:0,
+    damage:0, block:0, draw:1, energy:2, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:true},
+  {id:'rampage', name:'ランページ', type:'attack', cost:2, rarity:'uncommon', startingCount:0,
+    damage:16, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'bulwark', name:'バルワーク', type:'skill', cost:2, rarity:'uncommon', startingCount:0,
+    damage:0, block:12, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'inflame', name:'インフレイム', type:'power', cost:1, rarity:'uncommon', startingCount:0,
+    damage:0, block:0, draw:0, energy:0, strength:2, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:true},
+  {id:'ironskin', name:'アイアンスキン', type:'power', cost:1, rarity:'uncommon', startingCount:0,
+    damage:0, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:3, loseHp:0, exhaust:true},
+  {id:'demonform', name:'デーモンフォーム', type:'power', cost:3, rarity:'rare', startingCount:0,
+    damage:0, block:0, draw:0, energy:0, strength:3, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:true},
+  {id:'bloodletting', name:'ブラッドレッティング', type:'skill', cost:0, rarity:'rare', startingCount:0,
+    damage:0, block:0, draw:3, energy:1, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:3, exhaust:true},
 ];
-const ENEMY_TEMPLATES=[
-{name:'洞窟のスライム',emoji:'🟢',baseHp:38,elite:false,moves:[{type:'attack',damage:9},{type:'attack',damage:9},{type:'defend',block:6}]},
-{name:'錆びたゴブリン',emoji:'👺',baseHp:34,elite:false,moves:[{type:'attack',damage:7},{type:'buff',strength:2},{type:'attack',damage:7}]},
-{name:'徘徊する骸骨',emoji:'💀',baseHp:42,elite:false,moves:[{type:'defend',block:8},{type:'attack',damage:12}]},
-{name:'森の盗賊',emoji:'🗡️',baseHp:40,elite:false,moves:[{type:'attack',damage:6},{type:'attack',damage:6},{type:'attack',damage:14}]},
-{name:'鉄鎧のオーガ',emoji:'👹',baseHp:75,elite:true,moves:[{type:'attack',damage:16},{type:'defend',block:12},{type:'attack',damage:16},{type:'buff',strength:3}]},
-{name:'彷徨う怨霊',emoji:'👻',baseHp:68,elite:true,moves:[{type:'attack',damage:11},{type:'attack',damage:11},{type:'attack',damage:11},{type:'defend',block:15}]},
-{name:'灰燼の竜',emoji:'🐉',baseHp:140,elite:true,boss:true,moves:[{type:'attack',damage:20},{type:'buff',strength:3},{type:'attack',damage:14},{type:'attack',damage:14},{type:'defend',block:18}]}
+
+const ENEMY_TEMPLATES = [
+  {name:'洞窟のスライム', emoji:'🟢', baseHp:38, elite:false, moves:[{type:'attack',damage:9},{type:'attack',damage:9},{type:'defend',block:6}]},
+  {name:'錆びたゴブリン', emoji:'👺', baseHp:34, elite:false, moves:[{type:'attack',damage:7},{type:'buff',strength:2},{type:'attack',damage:7}]},
+  {name:'徘徊する骸骨', emoji:'💀', baseHp:42, elite:false, moves:[{type:'defend',block:8},{type:'attack',damage:12}]},
+  {name:'森の盗賊', emoji:'🗡️', baseHp:40, elite:false, moves:[{type:'attack',damage:6},{type:'attack',damage:6},{type:'attack',damage:14}]},
+  {name:'鉄鎧のオーガ', emoji:'👹', baseHp:75, elite:true, moves:[{type:'attack',damage:16},{type:'defend',block:12},{type:'attack',damage:16},{type:'buff',strength:3}]},
+  {name:'彷徨う怨霊', emoji:'👻', baseHp:68, elite:true, moves:[{type:'attack',damage:11},{type:'attack',damage:11},{type:'attack',damage:11},{type:'defend',block:15}]},
+  {name:'灰燼の竜', emoji:'🐉', baseHp:140, elite:true, boss:true, moves:[{type:'attack',damage:20},{type:'buff',strength:3},{type:'attack',damage:14},{type:'attack',damage:14},{type:'defend',block:18}]},
 ];
-const DEFAULT_SETTINGS={startingHp:70,energyPerTurn:3,handSize:5,floorCount:8,eliteEvery:4,enemyHpScalePct:12,restHealPct:30};
-const RARITY_LABEL={basic:'ベーシック',common:'コモン',uncommon:'アンコモン',rare:'レア'};
-const RARITY_WEIGHT={common:60,uncommon:30,rare:10};
-const RELICS=[
-{id:'ember',name:'熾火の指輪',desc:'各戦闘開始時、戦闘中の筋力+1。',cost:90},
-{id:'iron',name:'鉄片の護符',desc:'各戦闘開始時、自動ガード+2。',cost:100},
-{id:'scholar',name:'書庫の栞',desc:'各ターン開始時、追加で1枚引く。',cost:110},
-{id:'purse',name:'古びた財布',desc:'探索開始時に所持金+50。',cost:80}
-];
-function normalizeCard(c){const d=DEFAULT_CARDS.find(x=>x.id===c.id)||DEFAULT_CARDS[0];const o={...d,...c};
-['tempStrengthTurns','tempMetallicizeTurns','weakTurns','vulnerableTurns','poisonTurns','burn','burnTurns','bleed','bleedTurns','permanentStrength','permanentMetallicize'].forEach(k=>{if(o[k]==null)o[k]=0});
-if(o.target==null)o.target='enemy';if(o.tags==null)o.tags='';if(o.upgrade==null)o.upgrade={damage:0,block:0,cost:0};return o}
-function normalizeCards(cards){return (Array.isArray(cards)&&cards.length?cards:DEFAULT_CARDS).map(normalizeCard)}
-function loadJSON(key,fallback){try{const v=localStorage.getItem(key)||localStorage.getItem(key.replace('_v3',''))||localStorage.getItem(key==='ashbound_codex_cards_v3'?'cards':'settings');return v?JSON.parse(v):fallback}catch(e){return fallback}}
-function saveJSON(key,v){try{localStorage.setItem(key,JSON.stringify(v))}catch(e){}}
-async function loadCards(){return normalizeCards(loadJSON(STORAGE_KEYS.cards,DEFAULT_CARDS))}
-async function saveCards(cards){saveJSON(STORAGE_KEYS.cards,cards)}
-async function loadSettings(){return {...DEFAULT_SETTINGS,...loadJSON(STORAGE_KEYS.settings,{})}}
-async function saveSettings(s){saveJSON(STORAGE_KEYS.settings,s)}
 
-const S={screen:'loading',cards:[],settings:{...DEFAULT_SETTINGS},run:null,editingCard:null};
-function cardById(id){return S.cards.find(c=>c.id===id)}
-function cardLevel(c){return S.run?.upgrades?.[c.id]||0}
-function effective(c){const lv=cardLevel(c),u=c.upgrade||{};return {...c,cost:Math.max(0,c.cost+(u.cost||0)*lv),damage:(c.damage||0)+(u.damage||0)*lv,block:(c.block||0)+(u.block||0)*lv}}
-function cardDescription(c){c=effective(c);const p=[];
-if(c.damage)p.push(`敵に${c.damage}ダメージ`);if(c.block)p.push(`ブロック${c.block}`);if(c.draw)p.push(`1枚引く×${c.draw}`);if(c.energy)p.push(`エネルギー+${c.energy}`);
-if(c.strength)p.push(`戦闘中の筋力+${c.strength}${c.tempStrengthTurns?`（${c.tempStrengthTurns}T）`:''}`);if(c.permanentStrength)p.push(`永続筋力+${c.permanentStrength}`);
-if(c.metallicize)p.push(`戦闘中の自動ガード+${c.metallicize}${c.tempMetallicizeTurns?`（${c.tempMetallicizeTurns}T）`:''}`);if(c.permanentMetallicize)p.push(`永続自動ガード+${c.permanentMetallicize}`);
-if(c.weak)p.push(`弱体${c.weak}${c.weakTurns?`（${c.weakTurns}T）`:''}`);if(c.vulnerable)p.push(`脆弱${c.vulnerable}${c.vulnerableTurns?`（${c.vulnerableTurns}T）`:''}`);if(c.poison)p.push(`毒${c.poison}${c.poisonTurns?`（${c.poisonTurns}T）`:''}`);if(c.burn)p.push(`燃焼${c.burn}${c.burnTurns?`（${c.burnTurns}T）`:''}`);if(c.bleed)p.push(`出血${c.bleed}${c.bleedTurns?`（${c.bleedTurns}T）`:''}`);if(c.heal)p.push(`HP+${c.heal}`);if(c.loseHp)p.push(`自分に${c.loseHp}ダメージ`);if(c.exhaust)p.push('使用後消滅');if(c.tags)p.push(`［${c.tags}］`);return p.length?p.join('。')+'。':'効果なし'}
-function renderCardHTML(c,opts={}){const m=opts.mini?'mini':'';return `<div class="card type-${c.type} ${m}" data-cardid="${c.id}"><div class="cost">${effective(c).cost}</div><div class="banner"><div class="name">${c.name}</div></div><div class="art"></div><div class="desc">${cardDescription(c)}</div><div class="rarity-dot">${RARITY_LABEL[c.rarity]||''}</div></div>`}
+const DEFAULT_SETTINGS = {
+  startingHp: 70,
+  energyPerTurn: 3,
+  handSize: 5,
+  floorCount: 8,
+  eliteEvery: 4,
+  enemyHpScalePct: 12, // % increase per floor
+  restHealPct: 30,
+};
 
-function renderHome(){app().innerHTML=`<div class="screen"><div class="home-hero"><p class="eyebrow">ROGUELIKE DECKBUILDER</p><h1>灰燼の書庫</h1><p class="sub">Ashbound Codex</p></div><div class="home-actions"><button class="primary" id="btn-newrun">新しい探索を始める</button><button id="btn-editor">カードを編集する</button><button id="btn-settings">ルール設定</button><button id="btn-data">データ管理</button></div><p class="home-foot">全${S.cards.length}種のカード ・ 全${S.settings.floorCount}階層の探索</p></div>`;qs('#btn-newrun').onclick=startRun;qs('#btn-editor').onclick=()=>{S.screen='editor';renderEditor()};qs('#btn-settings').onclick=()=>{S.screen='settings';renderSettings()};qs('#btn-data').onclick=renderData}
-function renderSettings(){const s=S.settings;app().innerHTML=`<div class="screen"><div class="topbar"><div><p class="eyebrow">RULES</p><h2>探索ルール</h2></div><button class="ghost" id="back">← ホームへ</button></div><div class="settings-card"><div class="row"><div class="field"><label>開始HP</label><input id="s-hp" type="number" value="${s.startingHp}" min="10" max="999"></div><div class="field"><label>ターン毎エネルギー</label><input id="s-energy" type="number" value="${s.energyPerTurn}" min="1" max="10"></div></div><div class="row"><div class="field"><label>毎ターン手札</label><input id="s-hand" type="number" value="${s.handSize}" min="1" max="10"></div><div class="field"><label>探索階層</label><input id="s-floors" type="number" value="${s.floorCount}" min="1" max="30"></div></div><div class="row"><div class="field"><label>エリート間隔</label><input id="s-elite" type="number" value="${s.eliteEvery}" min="2" max="10"></div><div class="field"><label>休憩回復%</label><input id="s-rest" type="number" value="${s.restHealPct}" min="0" max="100"></div></div><button class="primary" id="save-settings">保存</button></div></div>`;qs('#back').onclick=()=>{S.screen='home';renderHome()};qs('#save-settings').onclick=async()=>{S.settings={...s,startingHp:clampInt(qs('#s-hp').value,10,999,70),energyPerTurn:clampInt(qs('#s-energy').value,1,10,3),handSize:clampInt(qs('#s-hand').value,1,10,5),floorCount:clampInt(qs('#s-floors').value,1,30,8),eliteEvery:clampInt(qs('#s-elite').value,2,10,4),restHealPct:clampInt(qs('#s-rest').value,0,100,30)};await saveSettings(S.settings);renderHome()}}
-function renderData(){app().innerHTML=`<div class="screen"><div class="topbar"><div><p class="eyebrow">DATA</p><h2>データ管理</h2></div><button class="ghost" id="back">← ホームへ</button></div><div class="settings-card"><p>カード編集内容をJSONで保存・復元できます。別環境への移行にも使えます。</p><button class="primary" id="export">エクスポート</button><button id="import">インポート</button><input id="file" type="file" accept="application/json" hidden><p id="msg" class="hint"></p></div></div>`;qs('#back').onclick=()=>{S.screen='home';renderHome()};qs('#export').onclick=()=>{const blob=new Blob([JSON.stringify({version:VERSION,cards:S.cards,settings:S.settings},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ashbound-codex-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};qs('#import').onclick=()=>qs('#file').click();qs('#file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());S.cards=normalizeCards(d.cards);S.settings={...DEFAULT_SETTINGS,...(d.settings||{})};await saveCards(S.cards);await saveSettings(S.settings);qs('#msg').textContent='復元しました。';renderHome()}catch(err){qs('#msg').textContent='JSONを読み込めませんでした。'}}}
+const RARITY_LABEL = {basic:'ベーシック', common:'コモン', uncommon:'アンコモン', rare:'レア'};
+const RARITY_WEIGHT = {common:60, uncommon:30, rare:10};
 
-function renderEditor(){const groups=[['basic','ベーシック'],['common','コモン'],['uncommon','アンコモン'],['rare','レア']];let h=`<div class="screen"><div class="topbar"><div><p class="eyebrow">CARD EDITOR</p><h2>カード編集</h2></div><button class="ghost" id="back">← ホームへ</button></div>`;groups.forEach(([rar,label])=>{const cs=S.cards.filter(c=>c.rarity===rar);h+=`<div class="section-label">${label}（${cs.length}種）</div><div class="editor-grid">`;cs.forEach(c=>{h+=`<div class="editor-card-wrap" data-id="${c.id}">${renderCardHTML(c,{mini:true})}<div class="edit-actions"><button class="edit-btn">編集</button><button class="del-btn">削除</button></div></div>`});if(rar!=='basic')h+=`<div class="add-card-tile" data-rarity="${rar}">＋</div>`;h+='</div>'});h+='</div>';app().innerHTML=h;qs('#back').onclick=()=>{S.screen='home';renderHome()};qsa('.edit-btn').forEach(b=>b.onclick=()=>openCardModal(cardById(b.closest('.editor-card-wrap').dataset.id),false));qsa('.del-btn').forEach(b=>b.onclick=async()=>{if(confirm('このカードを削除しますか？')){S.cards=S.cards.filter(c=>c.id!==b.closest('.editor-card-wrap').dataset.id);await saveCards(S.cards);renderEditor()}});qsa('.add-card-tile').forEach(t=>t.onclick=()=>openCardModal(normalizeCard({id:newId(),name:'新しいカード',rarity:t.dataset.rarity}),true))}
-function openCardModal(card,isNew){const c=normalizeCard(card);const overlay=el(`<div class="modal-overlay"><div class="modal-box"><h3>${isNew?'カードを新規作成':'カードを編集'}</h3><div class="field"><label>カード名</label><input id="m-name" value="${c.name}"></div><div class="row"><div class="field"><label>タイプ</label><select id="m-type"><option value="attack">アタック</option><option value="skill">スキル</option><option value="power">パワー</option></select></div><div class="field"><label>コスト（0～6）</label><input id="m-cost" type="number" value="${c.cost}" min="0" max="6"></div></div><div class="row"><div class="field"><label>レアリティ</label><select id="m-rarity"><option value="basic">ベーシック</option><option value="common">コモン</option><option value="uncommon">アンコモン</option><option value="rare">レア</option></select></div><div class="field"><label>開始デッキ枚数</label><input id="m-start" type="number" value="${c.startingCount||0}" min="0" max="20"></div></div><div class="section-label">基本効果</div><div class="row"><div class="field"><label>ダメージ</label><input id="m-dmg" type="number" value="${c.damage||0}" min="0" max="999"></div><div class="field"><label>ブロック</label><input id="m-block" type="number" value="${c.block||0}" min="0" max="999"></div></div><div class="row"><div class="field"><label>ドロー</label><input id="m-draw" type="number" value="${c.draw||0}" min="0" max="20"></div><div class="field"><label>エネルギー</label><input id="m-energy" type="number" value="${c.energy||0}" min="0" max="20"></div></div><div class="section-label">一時効果（ターン数は0～99）</div><div class="row"><div class="field"><label>戦闘中の筋力</label><input id="m-str" type="number" value="${c.strength||0}" min="0" max="99"></div><div class="field"><label>持続ターン</label><input id="m-strt" type="number" value="${c.tempStrengthTurns||0}" min="0" max="99"></div></div><div class="row"><div class="field"><label>戦闘中の自動ガード</label><input id="m-met" type="number" value="${c.metallicize||0}" min="0" max="99"></div><div class="field"><label>持続ターン</label><input id="m-mett" type="number" value="${c.tempMetallicizeTurns||0}" min="0" max="99"></div></div><div class="section-label">永続効果</div><div class="row"><div class="field"><label>永続筋力</label><input id="m-pstr" type="number" value="${c.permanentStrength||0}" min="0" max="99"></div><div class="field"><label>永続自動ガード</label><input id="m-pmet" type="number" value="${c.permanentMetallicize||0}" min="0" max="99"></div></div><div class="section-label">状態異常</div><div class="row"><div class="field"><label>弱体量 / ターン</label><input id="m-weak" type="number" value="${c.weak||0}" min="0" max="99"><input id="m-weakt" type="number" value="${c.weakTurns||0}" min="0" max="99"></div><div class="field"><label>脆弱量 / ターン</label><input id="m-vuln" type="number" value="${c.vulnerable||0}" min="0" max="99"><input id="m-vulnt" type="number" value="${c.vulnerableTurns||0}" min="0" max="99"></div></div><div class="row"><div class="field"><label>毒量 / ターン</label><input id="m-poison" type="number" value="${c.poison||0}" min="0" max="99"><input id="m-poisont" type="number" value="${c.poisonTurns||0}" min="0" max="99"></div><div class="field"><label>燃焼量 / ターン</label><input id="m-burn" type="number" value="${c.burn||0}" min="0" max="99"><input id="m-burnt" type="number" value="${c.burnTurns||0}" min="0" max="99"></div></div><div class="row"><div class="field"><label>出血量 / ターン</label><input id="m-bleed" type="number" value="${c.bleed||0}" min="0" max="99"><input id="m-bleedt" type="number" value="${c.bleedTurns||0}" min="0" max="99"></div><div class="field"><label>回復 / 自傷</label><input id="m-heal" type="number" value="${c.heal||0}" min="0" max="999"><input id="m-lose" type="number" value="${c.loseHp||0}" min="0" max="999"></div></div><div class="section-label">追加設定</div><div class="row"><div class="field"><label>対象</label><select id="m-target"><option value="enemy">敵1体</option><option value="all">敵全体</option><option value="self">自分</option></select></div><div class="field"><label>タグ</label><input id="m-tags" value="${c.tags||''}" placeholder="攻撃,防御,パワー"></div></div><div class="row"><div class="field"><label>アップグレード時ダメージ増加</label><input id="m-ud" type="number" value="${c.upgrade?.damage||0}" min="0" max="99"></div><div class="field"><label>アップグレード時ブロック増加</label><input id="m-ub" type="number" value="${c.upgrade?.block||0}" min="0" max="99"></div></div><div class="checkbox-field"><input id="m-exhaust" type="checkbox" ${c.exhaust?'checked':''}><label for="m-exhaust">使用後に消滅</label></div><div class="modal-actions"><button class="ghost" id="cancel">キャンセル</button><button class="primary" id="save">保存</button></div></div></div>`);document.body.appendChild(overlay);qs('#m-type').value=c.type;qs('#m-rarity').value=c.rarity;qs('#m-target').value=c.target;qs('#cancel').onclick=()=>overlay.remove();qs('#save').onclick=async()=>{const u={...c,id:c.id,name:qs('#m-name').value.trim()||'無名のカード',type:qs('#m-type').value,cost:clampInt(qs('#m-cost').value,0,6,1),rarity:qs('#m-rarity').value,startingCount:clampInt(qs('#m-start').value,0,20,0),damage:clampInt(qs('#m-dmg').value,0,999,0),block:clampInt(qs('#m-block').value,0,999,0),draw:clampInt(qs('#m-draw').value,0,20,0),energy:clampInt(qs('#m-energy').value,0,20,0),strength:clampInt(qs('#m-str').value,0,99,0),tempStrengthTurns:clampInt(qs('#m-strt').value,0,99,0),metallicize:clampInt(qs('#m-met').value,0,99,0),tempMetallicizeTurns:clampInt(qs('#m-mett').value,0,99,0),permanentStrength:clampInt(qs('#m-pstr').value,0,99,0),permanentMetallicize:clampInt(qs('#m-pmet').value,0,99,0),weak:clampInt(qs('#m-weak').value,0,99,0),weakTurns:clampInt(qs('#m-weakt').value,0,99,0),vulnerable:clampInt(qs('#m-vuln').value,0,99,0),vulnerableTurns:clampInt(qs('#m-vulnt').value,0,99,0),poison:clampInt(qs('#m-poison').value,0,99,0),poisonTurns:clampInt(qs('#m-poisont').value,0,99,0),burn:clampInt(qs('#m-burn').value,0,99,0),burnTurns:clampInt(qs('#m-burnt').value,0,99,0),bleed:clampInt(qs('#m-bleed').value,0,99,0),bleedTurns:clampInt(qs('#m-bleedt').value,0,99,0),heal:clampInt(qs('#m-heal').value,0,999,0),loseHp:clampInt(qs('#m-lose').value,0,999,0),target:qs('#m-target').value,tags:qs('#m-tags').value,upgrade:{damage:clampInt(qs('#m-ud').value,0,99,0),block:clampInt(qs('#m-ub').value,0,99,0)},exhaust:qs('#m-exhaust').checked};if(isNew)S.cards.push(u);else S.cards=S.cards.map(x=>x.id===u.id?u:x);await saveCards(S.cards);overlay.remove();renderEditor()}}
+/* ============================= STORAGE ============================= */
 
-function buildStartingDeck(){const d=[];S.cards.forEach(c=>{for(let i=0;i<(c.startingCount||0);i++)d.push(c.id)});return d.length?d:['strike','strike','strike','defend','defend']}
-function weightedPick(ex=[]){const p=S.cards.filter(c=>c.rarity!=='basic'&&!ex.includes(c.id));if(!p.length)return null;let n=Math.random()*p.reduce((s,c)=>s+(RARITY_WEIGHT[c.rarity]||10),0);for(const c of p){n-=RARITY_WEIGHT[c.rarity]||10;if(n<=0)return c}return p[p.length-1]}
-function rewardChoices(){const a=[],u=[];for(let i=0;i<3;i++){const c=weightedPick(u);if(c){a.push(c);u.push(c.id)}}return a}
-function makeEnemy(floor,i){const elite=floor%S.settings.eliteEvery===0,last=floor===S.settings.floorCount;let pool=ENEMY_TEMPLATES.filter(e=>last?e.boss:(elite?e.elite&&!e.boss:!e.elite));if(!pool.length)pool=ENEMY_TEMPLATES.filter(e=>!e.elite);const t=pool[Math.floor(Math.random()*pool.length)],scale=1+(Math.max(0,floor-1)*S.settings.enemyHpScalePct/100);const hp=Math.round(t.baseHp*scale);return {...t,hp,maxHp:hp,block:0,strength:0,weak:0,vulnerable:0,poison:0,poisonTurns:0,burn:0,burnTurns:0,bleed:0,bleedTurns:0,moveIdx:0,id:`e${i}`}}
-function startRun(){const deck=buildStartingDeck();S.run={deck:shuffle(deck),draw:[],discard:[],exhausted:[],hand:[],player:{hp:S.settings.startingHp,maxHp:S.settings.startingHp,energy:S.settings.energyPerTurn,block:0,strength:0,metallicize:0,permanentStrength:0,permanentMetallicize:0,weak:0,vulnerable:0},floor:1,enemies:[],selectedEnemy:0,log:[],turn:0,turnPhase:'player',ended:false,gold:120,relics:[],upgrades:{},path:null};S.run.draw=S.run.deck;S.run.deck=[];renderMap()}
-function log(m){S.run.log.unshift(m);S.run.log=S.run.log.slice(0,30)}
-function renderMap(){const r=S.run;app().innerHTML=`<div class="screen center-screen"><p class="eyebrow">PATH OF ASH</p><h2>${r.floor}階層への進路</h2><p>次のマスを選択してください。分岐は毎回変化します。</p><div style="display:grid;gap:10px;max-width:420px;margin:24px auto"><button class="primary" data-node="battle">⚔ 戦闘</button><button data-node="event">✦ イベント</button><button data-node="shop">◇ 商店</button><button data-node="rest">🔥 休憩所</button></div><p>所持金 ${r.gold}G</p></div>`;qsa('[data-node]').forEach(b=>b.onclick=()=>enterNode(b.dataset.node))}
-function enterNode(node){S.run.path=node;if(node==='battle')beginBattle();if(node==='event')renderEvent();if(node==='shop')renderShop();if(node==='rest')renderRest()}
-function beginBattle(){const r=S.run;const full=[...r.draw,...r.hand,...r.discard,...r.exhausted];r.draw=shuffle(full);r.hand=[];r.discard=[];r.exhausted=[];r.enemies=[];const count=(r.floor%3===0||r.floor===S.settings.floorCount)?1:2;for(let i=0;i<count;i++)r.enemies.push(makeEnemy(r.floor,i));r.selectedEnemy=0;r.player.block=0;r.player.strength=0;r.player.metallicize=0;r.turn=0;r.log=[];log(`${r.enemies.map(e=>e.name).join(' と ')}が現れた！`);if(r.relics.includes('ember'))r.player.strength+=1;if(r.relics.includes('iron'))r.player.metallicize+=2;startPlayerTurn(true);S.screen='battle';renderBattle()}
-function drawCards(n){const r=S.run;for(let i=0;i<n;i++){if(!r.draw.length){if(!r.discard.length)return;r.draw=shuffle(r.discard);r.discard=[]}r.hand.push(r.draw.pop())}}
-function startPlayerTurn(first){const r=S.run;r.player.block=0;r.player.block+=r.player.metallicize+r.player.permanentMetallicize;if(!first){r.discard.push(...r.hand);r.hand=[]}r.player.energy=S.settings.energyPerTurn;r.turn++;drawCards(S.settings.handSize+(r.relics.includes('scholar')?1:0));r.turnPhase='player'}
-function tickStatus(e,key,turnKey){if(e[key]>0){e[key]--;if(e[turnKey]<=0)e[key]=0}}
-function damageEnemy(e,raw){let dmg=raw;if(S.run.player.weak>0)dmg=Math.floor(dmg*.75);if(e.vulnerable>0)dmg=Math.floor(dmg*1.5);const b=Math.min(e.block,dmg);e.block-=b;dmg-=b;e.hp=Math.max(0,e.hp-dmg);return dmg+b}
-function damagePlayer(raw){const r=S.run,p=r.player;let dmg=raw;const b=Math.min(p.block,dmg);p.block-=b;dmg-=b;p.hp=Math.max(0,p.hp-dmg);return dmg+b}
-function applyCardEffect(c,target){const r=S.run,p=r.player;c=effective(c);const targets=c.target==='all'?r.enemies.filter(e=>e.hp>0):[target];if(c.damage){for(const e of targets)damageEnemy(e,c.damage+p.strength)}if(c.block)p.block+=c.block;if(c.draw)drawCards(c.draw);if(c.energy)p.energy+=c.energy;if(c.strength){p.strength+=c.strength;if(c.tempStrengthTurns===0)c.tempStrengthTurns=1;r.tempStrengthTurns=c.tempStrengthTurns}if(c.metallicize){p.metallicize+=c.metallicize;if(c.tempMetallicizeTurns===0)c.tempMetallicizeTurns=1;r.tempMetallicizeTurns=c.tempMetallicizeTurns}if(c.permanentStrength)p.permanentStrength+=c.permanentStrength;if(c.permanentMetallicize)p.permanentMetallicize+=c.permanentMetallicize;if(c.heal)p.hp=Math.min(p.maxHp,p.hp+c.heal);if(c.loseHp)p.hp=Math.max(0,p.hp-c.loseHp);for(const e of targets){if(c.weak){e.weak=Math.max(e.weak,c.weak);e.weakTurns=Math.max(e.weakTurns,c.weakTurns||1)}if(c.vulnerable){e.vulnerable=Math.max(e.vulnerable,c.vulnerable);e.vulnerableTurns=Math.max(e.vulnerableTurns,c.vulnerableTurns||1)}if(c.poison){e.poison=Math.max(e.poison,c.poison);e.poisonTurns=Math.max(e.poisonTurns,c.poisonTurns||1)}if(c.burn){e.burn=Math.max(e.burn,c.burn);e.burnTurns=Math.max(e.burnTurns,c.burnTurns||1)}if(c.bleed){e.bleed=Math.max(e.bleed,c.bleed);e.bleedTurns=Math.max(e.bleedTurns,c.bleedTurns||1)}}}
-function playCard(i){const r=S.run;if(r.turnPhase!=='player')return;const id=r.hand[i],c0=cardById(id);if(!c0)return;const c=effective(c0);if(c.cost>r.player.energy)return;const target=r.enemies[r.selectedEnemy]||r.enemies.find(e=>e.hp>0);if(c.target==='enemy'&&!target)return;r.player.energy-=c.cost;applyCardEffect(c,target);log(`${c.name}を使用。`);r.hand.splice(i,1);if(c.exhaust)r.exhausted.push(id);else r.discard.push(id);if(r.player.hp<=0)return lose();if(r.enemies.every(e=>e.hp<=0))return winBattle();renderBattle()}
-function endPlayerTurn(){const r=S.run;if(r.turnPhase!=='player')return;r.turnPhase='enemy';renderBattle();setTimeout(enemyTurn,350)}
-function enemyTurn(){const r=S.run;if(r.ended)return;for(const e of r.enemies){if(e.hp<=0)continue;if(e.poison>0){damageEnemySelf(e,e.poison);e.poisonTurns--;if(e.poisonTurns<=0)e.poison=0}if(e.burn>0){damageEnemySelf(e,e.burn);e.burnTurns--;if(e.burnTurns<=0)e.burn=0}if(e.bleed>0){damageEnemySelf(e,e.bleed);e.bleedTurns--;if(e.bleedTurns<=0)e.bleed=0}if(e.hp<=0)continue;const m=e.moves[e.moveIdx%e.moves.length];if(m.type==='attack')damagePlayer(m.damage+e.strength);else if(m.type==='defend')e.block+=m.block;else if(m.type==='buff')e.strength+=m.strength;if(e.boss&&r.turn%3===0){e.block+=12;log(`${e.name}のボスギミック：灰燼の結界。ブロック+12。`)}e.moveIdx++;tickStatus(e,'weak','weakTurns');tickStatus(e,'vulnerable','vulnerableTurns');if(r.player.hp<=0)return lose()}r.player.strength=Math.max(0,r.player.strength-(r.tempStrengthTurns?0:0));if(r.tempStrengthTurns){r.tempStrengthTurns--;if(r.tempStrengthTurns<=0)r.player.strength=0}if(r.tempMetallicizeTurns){r.tempMetallicizeTurns--;if(r.tempMetallicizeTurns<=0)r.player.metallicize=0}startPlayerTurn(false);renderBattle()}
-function damageEnemySelf(e,n){e.hp=Math.max(0,e.hp-n)}
-function winBattle(){const r=S.run;r.enemies=[];r.player.strength=0;r.player.metallicize=0;r.tempStrengthTurns=0;r.tempMetallicizeTurns=0;r.gold+=25;renderReward()}
-function lose(){S.run.ended=true;renderDefeat()}
-function renderBattle(){const r=S.run,alive=r.enemies.filter(e=>e.hp>0);app().innerHTML=`<div class="screen"><div class="topbar"><div><p class="eyebrow">BATTLE</p><h2>${r.floor}階層</h2></div><div>💰 ${r.gold}G</div></div><div class="floor-progress">敵をクリックして対象を選択。複数敵戦あり。</div><div class="enemy-row">${r.enemies.map((e,i)=>`<div class="enemy-card ${i===r.selectedEnemy?'selected':''}" data-e="${i}"><div class="enemy-emoji">${e.emoji}</div><h3>${e.name}</h3><div>HP ${e.hp}/${e.maxHp}　🛡 ${e.block}</div><div class="chips">${e.strength?`💪${e.strength}`:''} ${e.weak?`😮‍💨${e.weak}(${e.weakTurns}T)`:''} ${e.vulnerable?`🎯${e.vulnerable}(${e.vulnerableTurns}T)`:''} ${e.poison?`☠${e.poison}`:''} ${e.burn?`🔥${e.burn}`:''} ${e.bleed?`🩸${e.bleed}`:''}</div></div>`).join('')}</div><div class="battle-mid"><div><h3>あなた</h3><p>HP ${r.player.hp}/${r.player.maxHp}　🛡${r.player.block}　⚡${r.player.energy}</p><p>💪${r.player.strength}　🛡${r.player.metallicize+r.player.permanentMetallicize}　永続筋力${r.player.permanentStrength}</p><div class="hand-row" id="hand-row">${r.hand.map((id,i)=>{const c=cardById(id);return `<div data-i="${i}">${renderCardHTML(c)}</div>`}).join('')}</div><button class="primary" id="end">ターン終了</button></div><div class="battle-log"><h3>ログ</h3>${r.log.map(x=>`<div>${x}</div>`).join('')}</div></div></div>`;qsa('.enemy-card').forEach(x=>x.onclick=()=>{r.selectedEnemy=+x.dataset.e;renderBattle()});qsa('#hand-row > div').forEach(x=>x.onclick=()=>playCard(+x.dataset.i));qs('#end').onclick=endPlayerTurn}
-function renderReward(){const r=S.run,cs=rewardChoices();app().innerHTML=`<div class="screen center-screen"><p class="eyebrow">REWARD</p><h2>戦利品</h2><p>カードを1枚選ぶか、強化を選べます。</p><div class="reward-row">${cs.map((c,i)=>`<div data-r="${i}">${renderCardHTML(c)}</div>`).join('')}</div><div><button id="upgrade">ランダムなカードを強化</button><button id="skip">スキップ</button></div></div>`;qsa('[data-r]').forEach(x=>x.onclick=()=>{const c=cs[+x.dataset.r];r.discard.push(c.id);advanceFloor()});qs('#upgrade').onclick=()=>upgradeRandom();qs('#skip').onclick=advanceFloor}
-function upgradeRandom(){const ids=[...new Set(S.run.deck.concat(S.run.draw,S.run.discard,S.run.hand))];if(!ids.length)return advanceFloor();const id=ids[Math.floor(Math.random()*ids.length)];S.run.upgrades[id]=(S.run.upgrades[id]||0)+1;log(`${cardById(id)?.name||id}を強化した。`);advanceFloor()}
-function advanceFloor(){if(S.run.floor>=S.settings.floorCount){S.screen='victory';renderVictory();return}S.run.floor++;renderMap()}
-function renderRest(){const r=S.run,heal=Math.round(r.player.maxHp*S.settings.restHealPct/100);app().innerHTML=`<div class="screen center-screen"><p class="eyebrow">SANCTUARY</p><h2>休憩所</h2><button class="primary" id="heal">休む（HP +${heal}）</button><button id="smith">カードを強化する</button><button id="skip">そのまま進む</button></div>`;qs('#heal').onclick=()=>{r.player.hp=Math.min(r.player.maxHp,r.player.hp+heal);advanceFloor()};qs('#smith').onclick=()=>{const ids=[...new Set(r.deck.concat(r.draw,r.discard))];if(ids.length){const id=ids[Math.floor(Math.random()*ids.length)];r.upgrades[id]=(r.upgrades[id]||0)+1}advanceFloor()};qs('#skip').onclick=advanceFloor}
-function renderEvent(){const r=S.run,events=[['灰の祭壇','HPを10失って100G得る','hp'],['古い書庫','カードを1枚削除する','remove'],['旅商人の落とし物','ランダムなレリックを得る','relic']];const e=events[Math.floor(Math.random()*events.length)];app().innerHTML=`<div class="screen center-screen"><p class="eyebrow">EVENT</p><h2>${e[0]}</h2><p>${e[1]}</p><button class="primary" id="do">選択する</button></div>`;qs('#do').onclick=()=>{if(e[2]==='hp'){r.player.hp=Math.max(1,r.player.hp-10);r.gold+=100}else if(e[2]==='remove'){renderRemove(advanceFloor);return}else{const x=RELICS[Math.floor(Math.random()*RELICS.length)];if(!r.relics.includes(x.id))r.relics.push(x.id)}advanceFloor()}}
-function renderRemove(done){const r=S.run,ids=[...new Set(r.deck.concat(r.draw,r.discard))];app().innerHTML=`<div class="screen center-screen"><h2>削除するカードを選ぶ</h2><div class="reward-row">${ids.map((id,i)=>`<div data-id="${id}">${renderCardHTML(cardById(id))}</div>`).join('')}</div></div>`;qsa('[data-id]').forEach(x=>x.onclick=()=>{const id=x.dataset.id;r.deck=r.deck.filter(a=>a!==id);r.draw=r.draw.filter(a=>a!==id);r.discard=r.discard.filter(a=>a!==id);r.hand=r.hand.filter(a=>a!==id);done()})}
-function renderShop(){const r=S.run,cs=rewardChoices().slice(0,2),rel=RELICS.filter(x=>!r.relics.includes(x.id))[0];app().innerHTML=`<div class="screen center-screen"><p class="eyebrow">SHOP</p><h2>灰燼の商店</h2><p>所持金 ${r.gold}G</p><div class="reward-row">${cs.map((c,i)=>`<div><p>${c.name} 50G</p>${renderCardHTML(c)}<button data-buy="${i}">購入</button></div>`).join('')}</div>${rel?`<p>${rel.name} ${rel.cost}G</p><button id="relic">レリック購入</button>`:''}<button id="remove">カード削除 75G</button><button id="leave">退店</button></div>`;qsa('[data-buy]').forEach(b=>b.onclick=()=>{if(r.gold>=50){r.gold-=50;r.discard.push(cs[+b.dataset.buy].id);b.disabled=true}});if(qs('#relic'))qs('#relic').onclick=()=>{if(r.gold>=rel.cost){r.gold-=rel.cost;r.relics.push(rel.id);qs('#relic').disabled=true}};qs('#remove').onclick=()=>{if(r.gold>=75){r.gold-=75;renderRemove(advanceFloor)}};qs('#leave').onclick=advanceFloor}
-function renderVictory(){app().innerHTML=`<div class="screen center-screen"><p class="eyebrow">THE CODEX CLOSES</p><h2>探索を制覇した！</h2><button class="primary" id="home">ホームへ戻る</button></div>`;qs('#home').onclick=()=>{S.screen='home';renderHome()}}
-function renderDefeat(){app().innerHTML=`<div class="screen center-screen"><p class="eyebrow">THE ASH CLAIMS YOU</p><h2>力尽きた…</h2><p>${S.run.floor}階層目で倒れた。</p><button class="primary" id="home">ホームへ戻る</button></div>`;qs('#home').onclick=()=>{S.screen='home';renderHome()}}
+function loadCards(){
+  try{
+    const value = localStorage.getItem('cards');
+    if(value) return JSON.parse(value);
+  }catch(e){ console.error(e); }
+  return DEFAULT_CARDS;
+}
+function saveCards(cards){
+  try{ localStorage.setItem('cards', JSON.stringify(cards)); }catch(e){ console.error(e); }
+}
+function loadSettings(){
+  try{
+    const value = localStorage.getItem('settings');
+    if(value) return Object.assign({}, DEFAULT_SETTINGS, JSON.parse(value));
+  }catch(e){ console.error(e); }
+  return {...DEFAULT_SETTINGS};
+}
+function saveSettings(s){
+  try{ localStorage.setItem('settings', JSON.stringify(s)); }catch(e){ console.error(e); }
+}
 
-async function boot(){app().innerHTML='<div class="center-screen"><p class="eyebrow">LOADING</p><h2>書庫を開いている…</h2></div>';S.cards=await loadCards();S.settings=await loadSettings();await saveCards(S.cards);S.screen='home';renderHome()}
+/* ============================= APP STATE ============================= */
+
+const S = {
+  screen: 'loading',
+  cards: [],
+  settings: {...DEFAULT_SETTINGS},
+  run: null, // battle/run state
+  editingCard: null,
+  editingIsNew: false,
+};
+
+function cardById(id){ return S.cards.find(c=>c.id===id); }
+
+/* ============================= CARD TEXT ============================= */
+
+function cardDescription(c){
+  const parts = [];
+  if(c.damage) parts.push(`敵に${c.damage}ダメージ`);
+  if(c.block) parts.push(`ブロック${c.block}獲得`);
+  if(c.draw) parts.push(`カードを${c.draw}枚引く`);
+  if(c.energy) parts.push(`エネルギー+${c.energy}`);
+  if(c.strength) parts.push(`強化+${c.strength}`);
+  if(c.weak) parts.push(`敵に弱体${c.weak}`);
+  if(c.vulnerable) parts.push(`敵に脆弱${c.vulnerable}`);
+  if(c.poison) parts.push(`敵に毒${c.poison}`);
+  if(c.heal) parts.push(`HPを${c.heal}回復`);
+  if(c.metallicize) parts.push(`毎ターン自動ブロック+${c.metallicize}`);
+  if(c.loseHp) parts.push(`自分に${c.loseHp}ダメージ`);
+  if(c.exhaust) parts.push(`(使用後: 消滅)`);
+  return parts.length ? parts.join('。')+'。' : '効果なし';
+}
+
+/* ============================= RENDER HELPERS ============================= */
+
+function el(html){
+  const t = document.createElement('template');
+  t.innerHTML = html.trim();
+  return t.content.firstChild;
+}
+function qs(sel, root){ return (root||document).querySelector(sel); }
+function qsa(sel, root){ return Array.from((root||document).querySelectorAll(sel)); }
+
+function renderCardHTML(c, opts){
+  opts = opts || {};
+  const mini = opts.mini ? 'mini' : '';
+  const unplayable = opts.unplayable ? 'unplayable' : '';
+  return `
+  <div class="card type-${c.type} ${mini} ${unplayable}" data-cardinst="${opts.instId||''}" data-cardid="${c.id}">
+    <div class="cost">${c.cost}</div>
+    <div class="banner"><div class="name">${c.name}</div></div>
+    <div class="art"></div>
+    <div class="desc">${cardDescription(c)}</div>
+    <div class="rarity-dot">${RARITY_LABEL[c.rarity]||''}</div>
+  </div>`;
+}
+
+function app(){ return qs('#app'); }
+
+/* ============================= HOME SCREEN ============================= */
+
+function renderHome(){
+  app().innerHTML = `
+  <div class="screen">
+    <div class="home-hero">
+      <p class="eyebrow">ROGUELIKE DECKBUILDER</p>
+      <h1>灰燼の書庫</h1>
+      <p class="sub">Ashbound Codex</p>
+    </div>
+    <div class="home-actions">
+      <button class="primary" id="btn-newrun">新しい探索を始める</button>
+      <button id="btn-editor">カードを編集する</button>
+      <button id="btn-settings">ルール設定</button>
+    </div>
+    <p class="home-foot">全${S.cards.length}種のカード ・ 全${S.settings.floorCount}階層の探索</p>
+  </div>`;
+  qs('#btn-newrun').onclick = startRun;
+  qs('#btn-editor').onclick = ()=>{ S.screen='editor'; renderEditor(); };
+  qs('#btn-settings').onclick = ()=>{ S.screen='settings'; renderSettings(); };
+}
+
+/* ============================= SETTINGS SCREEN ============================= */
+
+function renderSettings(){
+  const s = S.settings;
+  app().innerHTML = `
+  <div class="screen">
+    <div class="topbar">
+      <div><p class="eyebrow">RULES</p><h2>探索ルールの設定</h2></div>
+      <button class="ghost" id="btn-back">← ホームへ</button>
+    </div>
+    <div class="settings-card">
+      <div class="row">
+        <div class="field"><label>開始HP</label><input type="number" id="s-hp" value="${s.startingHp}" min="10" max="999"></div>
+        <div class="field"><label>ターン毎エネルギー</label><input type="number" id="s-energy" value="${s.energyPerTurn}" min="1" max="10"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>毎ターンの手札枚数</label><input type="number" id="s-hand" value="${s.handSize}" min="1" max="10"></div>
+        <div class="field"><label>探索の総戦闘数</label><input type="number" id="s-floors" value="${s.floorCount}" min="1" max="30"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>エリート出現間隔（○戦ごと）</label><input type="number" id="s-elite" value="${s.eliteEvery}" min="1" max="20"></div>
+        <div class="field"><label>階層ごとの敵HP増加率(%)</label><input type="number" id="s-scale" value="${s.enemyHpScalePct}" min="0" max="200"></div>
+      </div>
+      <div class="field"><label>休憩所での回復率(%)</label><input type="number" id="s-rest" value="${s.restHealPct}" min="0" max="100">
+        <p class="hint">3階層に一度、休憩所として最大HPのこの割合を回復します。</p>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-reset-settings">初期値に戻す</button>
+        <button class="primary" id="btn-save-settings">保存する</button>
+      </div>
+    </div>
+  </div>`;
+  qs('#btn-back').onclick = ()=>{ S.screen='home'; renderHome(); };
+  qs('#btn-reset-settings').onclick = async ()=>{
+    S.settings = {...DEFAULT_SETTINGS};
+    saveSettings(S.settings);
+    renderSettings();
+  };
+  qs('#btn-save-settings').onclick = async ()=>{
+    S.settings = {
+      startingHp: clampInt(qs('#s-hp').value,10,999,70),
+      energyPerTurn: clampInt(qs('#s-energy').value,1,10,3),
+      handSize: clampInt(qs('#s-hand').value,1,10,5),
+      floorCount: clampInt(qs('#s-floors').value,1,30,8),
+      eliteEvery: clampInt(qs('#s-elite').value,1,20,4),
+      enemyHpScalePct: clampInt(qs('#s-scale').value,0,200,12),
+      restHealPct: clampInt(qs('#s-rest').value,0,100,30),
+    };
+    saveSettings(S.settings);
+    S.screen='home'; renderHome();
+  };
+}
+function clampInt(v,min,max,def){
+  v = parseInt(v,10); if(isNaN(v)) return def; return Math.max(min,Math.min(max,v));
+}
+
+/* ============================= CARD EDITOR SCREEN ============================= */
+
+function renderEditor(){
+  const groups = [['basic','ベーシック'],['common','コモン'],['uncommon','アンコモン'],['rare','レア']];
+  let html = `
+  <div class="screen">
+    <div class="topbar">
+      <div><p class="eyebrow">CARD EDITOR</p><h2>カードを編集する</h2></div>
+      <button class="ghost" id="btn-back">← ホームへ</button>
+    </div>`;
+  groups.forEach(([rar,label])=>{
+    const cards = S.cards.filter(c=>c.rarity===rar);
+    html += `<div class="section-label">${label}（${cards.length}種）</div><div class="editor-grid">`;
+    cards.forEach(c=>{
+      html += `<div class="editor-card-wrap" data-id="${c.id}">
+        ${renderCardHTML(c,{mini:true})}
+        <div class="edit-actions">
+          <button class="edit-btn">編集</button>
+          <button class="del-btn">削除</button>
+        </div>
+      </div>`;
+    });
+    if(rar!=='basic'){
+      html += `<div class="add-card-tile" data-rarity="${rar}">＋</div>`;
+    }
+    html += `</div>`;
+  });
+  html += `</div>`;
+  app().innerHTML = html;
+
+  qs('#btn-back').onclick = ()=>{ S.screen='home'; renderHome(); };
+  qsa('.edit-btn').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.closest('.editor-card-wrap').dataset.id;
+      openCardModal(cardById(id), false);
+    };
+  });
+  qsa('.del-btn').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const id = btn.closest('.editor-card-wrap').dataset.id;
+      if(confirm('このカードを削除しますか？')){
+        S.cards = S.cards.filter(c=>c.id!==id);
+        saveCards(S.cards);
+        renderEditor();
+      }
+    };
+  });
+  qsa('.add-card-tile').forEach(tile=>{
+    tile.onclick = ()=>{
+      openCardModal({
+        id:newId(), name:'新しいカード', type:'attack', cost:1, rarity: tile.dataset.rarity, startingCount:0,
+        damage:0, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false
+      }, true);
+    };
+  });
+}
+
+function openCardModal(card, isNew){
+  const c = {...card};
+  const overlay = el(`<div class="modal-overlay">
+    <div class="modal-box">
+      <h3>${isNew? 'カードを新規作成' : 'カードを編集'}</h3>
+      <div class="field"><label>カード名</label><input type="text" id="m-name" value="${c.name}"></div>
+      <div class="row">
+        <div class="field"><label>タイプ</label>
+          <select id="m-type">
+            <option value="attack" ${c.type==='attack'?'selected':''}>アタック</option>
+            <option value="skill" ${c.type==='skill'?'selected':''}>スキル</option>
+            <option value="power" ${c.type==='power'?'selected':''}>パワー</option>
+          </select>
+        </div>
+        <div class="field"><label>コスト</label><input type="number" id="m-cost" value="${c.cost}" min="0" max="6"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>レアリティ</label>
+          <select id="m-rarity">
+            <option value="basic" ${c.rarity==='basic'?'selected':''}>ベーシック</option>
+            <option value="common" ${c.rarity==='common'?'selected':''}>コモン</option>
+            <option value="uncommon" ${c.rarity==='uncommon'?'selected':''}>アンコモン</option>
+            <option value="rare" ${c.rarity==='rare'?'selected':''}>レア</option>
+          </select>
+        </div>
+        <div class="field"><label>開始デッキの枚数</label><input type="number" id="m-startcount" value="${c.startingCount||0}" min="0" max="10"></div>
+      </div>
+      <div class="section-label">効果</div>
+      <div class="row">
+        <div class="field"><label>ダメージ</label><input type="number" id="m-damage" value="${c.damage||0}" min="0" max="99"></div>
+        <div class="field"><label>ブロック</label><input type="number" id="m-block" value="${c.block||0}" min="0" max="99"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>ドロー枚数</label><input type="number" id="m-draw" value="${c.draw||0}" min="0" max="9"></div>
+        <div class="field"><label>エネルギー付与</label><input type="number" id="m-energy" value="${c.energy||0}" min="0" max="9"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>強化(永続、攻撃力+)</label><input type="number" id="m-strength" value="${c.strength||0}" min="0" max="20"></div>
+        <div class="field"><label>自動ブロック(毎ターン、永続)</label><input type="number" id="m-metallicize" value="${c.metallicize||0}" min="0" max="20"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>敵に弱体付与</label><input type="number" id="m-weak" value="${c.weak||0}" min="0" max="9"></div>
+        <div class="field"><label>敵に脆弱付与</label><input type="number" id="m-vulnerable" value="${c.vulnerable||0}" min="0" max="9"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>敵に毒付与</label><input type="number" id="m-poison" value="${c.poison||0}" min="0" max="9"></div>
+        <div class="field"><label>自分のHP回復</label><input type="number" id="m-heal" value="${c.heal||0}" min="0" max="99"></div>
+      </div>
+      <div class="field"><label>自分へのダメージ（代償）</label><input type="number" id="m-losehp" value="${c.loseHp||0}" min="0" max="99"></div>
+      <div class="checkbox-field"><input type="checkbox" id="m-exhaust" ${c.exhaust?'checked':''}><label for="m-exhaust">使用後に消滅する（エグゾースト）</label></div>
+      <div class="modal-actions">
+        <button class="ghost" id="m-cancel">キャンセル</button>
+        <button class="primary" id="m-save">保存する</button>
+      </div>
+    </div>
+  </div>`);
+  document.body.appendChild(overlay);
+  qs('#m-cancel',overlay).onclick = ()=> overlay.remove();
+  qs('#m-save',overlay).onclick = async ()=>{
+    const updated = {
+      id: c.id,
+      name: qs('#m-name',overlay).value.trim() || '無名のカード',
+      type: qs('#m-type',overlay).value,
+      cost: clampInt(qs('#m-cost',overlay).value,0,6,1),
+      rarity: qs('#m-rarity',overlay).value,
+      startingCount: clampInt(qs('#m-startcount',overlay).value,0,10,0),
+      damage: clampInt(qs('#m-damage',overlay).value,0,99,0),
+      block: clampInt(qs('#m-block',overlay).value,0,99,0),
+      draw: clampInt(qs('#m-draw',overlay).value,0,9,0),
+      energy: clampInt(qs('#m-energy',overlay).value,0,9,0),
+      strength: clampInt(qs('#m-strength',overlay).value,0,20,0),
+      metallicize: clampInt(qs('#m-metallicize',overlay).value,0,20,0),
+      weak: clampInt(qs('#m-weak',overlay).value,0,9,0),
+      vulnerable: clampInt(qs('#m-vulnerable',overlay).value,0,9,0),
+      poison: clampInt(qs('#m-poison',overlay).value,0,9,0),
+      heal: clampInt(qs('#m-heal',overlay).value,0,99,0),
+      loseHp: clampInt(qs('#m-losehp',overlay).value,0,99,0),
+      exhaust: qs('#m-exhaust',overlay).checked,
+    };
+    if(isNew){ S.cards.push(updated); }
+    else{ S.cards = S.cards.map(x=> x.id===updated.id? updated : x); }
+    saveCards(S.cards);
+    overlay.remove();
+    renderEditor();
+  };
+}
+
+/* ============================= RUN / BATTLE LOGIC ============================= */
+
+function buildStartingDeck(){
+  const deck = [];
+  S.cards.forEach(c=>{
+    for(let i=0;i<(c.startingCount||0);i++) deck.push(c.id);
+  });
+  if(deck.length===0){ // fallback safety
+    deck.push('strike','strike','strike','defend','defend');
+  }
+  return deck;
+}
+
+function weightedPickCard(excludeIds){
+  const pool = S.cards.filter(c=> c.rarity!=='basic' && !excludeIds.includes(c.id));
+  if(pool.length===0) return null;
+  const total = pool.reduce((s,c)=> s + (RARITY_WEIGHT[c.rarity]||10), 0);
+  let r = Math.random()*total;
+  for(const c of pool){
+    r -= (RARITY_WEIGHT[c.rarity]||10);
+    if(r<=0) return c;
+  }
+  return pool[pool.length-1];
+}
+
+function threeRewardCards(){
+  const picks = [];
+  const used = [];
+  for(let i=0;i<3;i++){
+    const c = weightedPickCard(used);
+    if(!c) break;
+    picks.push(c); used.push(c.id);
+  }
+  return picks;
+}
+
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+function makeEnemy(floorIndex){
+  const s = S.settings;
+  const isElite = (floorIndex % s.eliteEvery === 0);
+  const isLast = floorIndex === s.floorCount;
+  let pool = ENEMY_TEMPLATES.filter(e => isLast ? e.boss : (isElite ? e.elite && !e.boss : !e.elite));
+  if(pool.length===0) pool = ENEMY_TEMPLATES.filter(e=>!e.elite);
+  const t = pool[Math.floor(Math.random()*pool.length)];
+  const scale = 1 + (Math.max(0,floorIndex-1) * (s.enemyHpScalePct/100));
+  const hp = Math.round(t.baseHp * scale);
+  return {
+    name: t.name, emoji: t.emoji, elite: t.elite||false, boss: t.boss||false,
+    hp, maxHp: hp, block:0, strength:0, weak:0, vulnerable:0, poison:0,
+    moves: t.moves, moveIdx: 0,
+  };
+}
+
+function startRun(){
+  const deckIds = buildStartingDeck();
+  S.run = {
+    deck: shuffle(deckIds),
+    draw: [],
+    discard: [],
+    exhausted: [],
+    hand: [],
+    player: {
+      hp: S.settings.startingHp, maxHp: S.settings.startingHp,
+      energy: S.settings.energyPerTurn, block:0, strength:0, weak:0, vulnerable:0, poison:0, metallicize:0,
+    },
+    floor: 1,
+    enemy: null,
+    log: [],
+    turnPhase: 'player',
+    ended:false,
+  };
+  S.run.draw = shuffle(S.run.deck);
+  S.run.deck = [];
+  beginFloor();
+}
+
+function pushLog(msg){
+  S.run.log.unshift(msg);
+  if(S.run.log.length>30) S.run.log.pop();
+}
+
+function beginFloor(){
+  const r = S.run;
+  const isRest = (r.floor % 3 === 0) && (r.floor !== S.settings.floorCount) && (r.floor % S.settings.eliteEvery !== 0);
+  if(isRest){
+    S.screen='rest';
+    renderRest();
+    return;
+  }
+  // Rebuild the full card pool for the new battle: everything in the draw pile,
+  // hand, discard pile, and exhaust pile returns and gets reshuffled. This mirrors
+  // standard deckbuilder behavior and prevents cards from being lost between floors.
+  const fullPool = [...r.draw, ...r.hand, ...r.discard, ...r.exhausted];
+  r.draw = shuffle(fullPool);
+  r.hand = [];
+  r.discard = [];
+  r.exhausted = [];
+
+  r.enemy = makeEnemy(r.floor);
+  r.player.block = 0;
+  r.log = [];
+  pushLog(`${r.enemy.name}が現れた！`);
+  startPlayerTurn(true);
+  S.screen='battle';
+  renderBattle();
+}
+
+function drawCards(n){
+  const r = S.run;
+  for(let i=0;i<n;i++){
+    if(r.draw.length===0){
+      if(r.discard.length===0) return;
+      r.draw = shuffle(r.discard);
+      r.discard = [];
+      pushLog('捨札を山札に戻した。');
+    }
+    r.hand.push(r.draw.pop());
+  }
+}
+
+function startPlayerTurn(first){
+  const r = S.run;
+  r.player.block = 0;
+  if(r.player.metallicize>0){ r.player.block += r.player.metallicize; }
+  if(!first){
+    // discard hand from previous turn
+    r.discard.push(...r.hand);
+    r.hand = [];
+  }
+  r.player.energy = S.settings.energyPerTurn;
+  drawCards(S.settings.handSize);
+  r.turnPhase='player';
+}
+
+function applyDamageToEnemy(raw){
+  const r = S.run; const e = r.enemy;
+  let dmg = raw;
+  if(r.player.weak>0) dmg = Math.floor(dmg*0.75);
+  if(e.vulnerable>0) dmg = Math.floor(dmg*1.5);
+  const blocked = Math.min(e.block, dmg);
+  e.block -= blocked; dmg -= blocked;
+  e.hp = Math.max(0, e.hp - dmg);
+  return dmg+blocked;
+}
+function applyDamageToPlayer(raw){
+  const r = S.run; const p = r.player;
+  let dmg = raw;
+  if(r.enemy.weak>0) dmg = Math.floor(dmg*0.75);
+  if(p.vulnerable>0) dmg = Math.floor(dmg*1.5);
+  const blocked = Math.min(p.block, dmg);
+  p.block -= blocked; dmg -= blocked;
+  p.hp = Math.max(0, p.hp - dmg);
+  return dmg+blocked;
+}
+
+function playCard(handIdx){
+  const r = S.run; if(r.turnPhase!=='player') return;
+  const cardId = r.hand[handIdx];
+  const c = cardById(cardId);
+  if(!c || c.cost > r.player.energy) return;
+  r.player.energy -= c.cost;
+
+  if(c.damage){
+    const dealt = applyDamageToEnemy(c.damage + r.player.strength);
+    pushLog(`${c.name}: 敵に${dealt}ダメージ。`);
+  }
+  if(c.block){ r.player.block += c.block; pushLog(`${c.name}: ブロック+${c.block}。`); }
+  if(c.draw){ drawCards(c.draw); pushLog(`${c.name}: カードを${c.draw}枚引いた。`); }
+  if(c.energy){ r.player.energy += c.energy; }
+  if(c.strength){ r.player.strength += c.strength; pushLog(`${c.name}: 強化+${c.strength}。`); }
+  if(c.metallicize){ r.player.metallicize += c.metallicize; }
+  if(c.weak){ r.enemy.weak += c.weak; }
+  if(c.vulnerable){ r.enemy.vulnerable += c.vulnerable; }
+  if(c.poison){ r.enemy.poison += c.poison; }
+  if(c.heal){ r.player.hp = Math.min(r.player.maxHp, r.player.hp + c.heal); }
+  if(c.loseHp){ r.player.hp = Math.max(0, r.player.hp - c.loseHp); }
+
+  r.hand.splice(handIdx,1);
+  if(c.exhaust){ r.exhausted.push(cardId); }
+  else{ r.discard.push(cardId); }
+
+  if(r.enemy.hp<=0){ onEnemyDefeated(); return; }
+  if(r.player.hp<=0){ onPlayerDefeated(); return; }
+  renderBattle();
+}
+
+function endPlayerTurn(){
+  const r = S.run; if(r.turnPhase!=='player') return;
+  // tick down player debuffs at end of player's turn
+  if(r.player.weak>0) r.player.weak--;
+  if(r.player.vulnerable>0) r.player.vulnerable--;
+  r.turnPhase='enemy';
+  renderBattle();
+  setTimeout(runEnemyTurn, 550);
+}
+
+function runEnemyTurn(){
+  const r = S.run; const e = r.enemy;
+  if(r.ended) return;
+  // poison at start of enemy turn
+  if(e.poison>0){
+    e.hp = Math.max(0, e.hp - e.poison);
+    pushLog(`${e.name}は毒で${e.poison}ダメージ。`);
+    e.poison--;
+    if(e.hp<=0){ onEnemyDefeated(); return; }
+  }
+  const move = e.moves[e.moveIdx % e.moves.length];
+  if(move.type==='attack'){
+    const dealt = applyDamageToPlayer(move.damage + e.strength);
+    pushLog(`${e.name}の攻撃！ ${dealt}ダメージ。`);
+  } else if(move.type==='defend'){
+    e.block += move.block;
+    pushLog(`${e.name}は防御態勢。ブロック+${move.block}。`);
+  } else if(move.type==='buff'){
+    e.strength += move.strength;
+    pushLog(`${e.name}は力を高めた！ 強化+${move.strength}。`);
+  }
+  if(e.weak>0) e.weak--;
+  if(e.vulnerable>0) e.vulnerable--;
+  e.moveIdx++;
+  if(r.player.hp<=0){ onPlayerDefeated(); return; }
+  startPlayerTurn(false);
+  renderBattle();
+}
+
+function onEnemyDefeated(){
+  const r = S.run;
+  pushLog(`${r.enemy.name}を撃破した！`);
+  if(r.floor >= S.settings.floorCount){
+    S.screen='victory'; renderVictory(); return;
+  }
+  S.screen='reward';
+  renderReward();
+}
+function onPlayerDefeated(){
+  S.run.ended = true;
+  S.screen='defeat';
+  renderDefeat();
+}
+
+/* ============================= BATTLE RENDER ============================= */
+
+function statusChips(entity){
+  const chips = [];
+  if(entity.strength) chips.push(`💪 強化 ${entity.strength}`);
+  if(entity.weak) chips.push(`😮‍💨 弱体 ${entity.weak}`);
+  if(entity.vulnerable) chips.push(`🎯 脆弱 ${entity.vulnerable}`);
+  if(entity.poison) chips.push(`☠️ 毒 ${entity.poison}`);
+  if(entity.metallicize) chips.push(`🛡️ 自動 ${entity.metallicize}`);
+  return chips.map(c=>`<span class="status-chip">${c}</span>`).join('');
+}
+function intentLabel(e){
+  const move = e.moves[e.moveIdx % e.moves.length];
+  if(move.type==='attack') return {cls:'atk', text:`⚔️ 攻撃予告：${move.damage + e.strength}`};
+  if(move.type==='defend') return {cls:'def', text:`🛡️ 防御予告：${move.block}`};
+  return {cls:'buf', text:`✨ 強化予告：+${move.strength}`};
+}
+
+function renderBattle(){
+  const r = S.run; const p = r.player; const e = r.enemy;
+  const intent = intentLabel(e);
+  app().innerHTML = `
+  <div class="screen">
+    <div class="floor-progress">階層 ${r.floor} / ${S.settings.floorCount} ${e.boss?'・ボス戦':(e.elite?'・エリート':'')}</div>
+    <div class="battlefield">
+      <div class="combatant player">
+        <div class="portrait">🗡️</div>
+        <div class="cname">冒険者</div>
+        <div class="hpbar-wrap"><div class="hpbar-fill" style="width:${Math.max(0,100*p.hp/p.maxHp)}%"></div><div class="hpbar-text">${p.hp} / ${p.maxHp}${p.block?` (🛡${p.block})`:''}</div></div>
+        <div class="statuses">${statusChips(p)}</div>
+      </div>
+      <div class="vsmark">VS</div>
+      <div class="combatant enemy">
+        <div class="portrait">${e.emoji}</div>
+        <div class="cname">${e.name}</div>
+        <div class="hpbar-wrap"><div class="hpbar-fill" style="width:${Math.max(0,100*e.hp/e.maxHp)}%"></div><div class="hpbar-text">${e.hp} / ${e.maxHp}${e.block?` (🛡${e.block})`:''}</div></div>
+        <div class="statuses">${statusChips(e)}</div>
+        <div class="intent ${intent.cls}">${intent.text}</div>
+      </div>
+    </div>
+
+    <div class="hand-zone">
+      <div class="battle-controls">
+        <div class="pile-info">
+          <span>山札 ${r.draw.length}</span><span>捨札 ${r.discard.length}</span>
+        </div>
+        <div class="energy-badge">${p.energy}</div>
+        <button class="primary" id="btn-endturn" ${r.turnPhase!=='player'?'disabled':''}>${r.turnPhase==='player'?'ターン終了':'敵の行動中…'}</button>
+      </div>
+      <div class="hand-row" id="hand-row">
+        ${r.hand.map((cid,idx)=>{
+          const c = cardById(cid);
+          const unplayable = (c.cost>p.energy || r.turnPhase!=='player');
+          return `<div data-idx="${idx}">${renderCardHTML(c,{unplayable})}</div>`;
+        }).join('')}
+      </div>
+      <div class="log-box">${r.log.map(l=>`<div>・${l}</div>`).join('')}</div>
+    </div>
+  </div>`;
+
+  qsa('#hand-row > div').forEach(wrap=>{
+    wrap.querySelector('.card').onclick = ()=>{
+      if(r.turnPhase!=='player') return;
+      playCard(parseInt(wrap.dataset.idx,10));
+    };
+  });
+  qs('#btn-endturn').onclick = endPlayerTurn;
+}
+
+/* ============================= REST SCREEN ============================= */
+
+function renderRest(){
+  const r = S.run;
+  const healAmt = Math.round(r.player.maxHp * (S.settings.restHealPct/100));
+  app().innerHTML = `
+  <div class="screen center-screen">
+    <p class="eyebrow">SANCTUARY</p>
+    <h2>静かな休憩所</h2>
+    <p style="color:var(--parchment-dim); margin-top:10px;">HP ${r.player.hp} / ${r.player.maxHp}</p>
+    <div style="margin-top:26px;">
+      <button class="primary" id="btn-rest-heal">火を囲んで休む（HP +${healAmt}）</button>
+    </div>
+    <div style="margin-top:12px;">
+      <button class="ghost" id="btn-rest-skip">そのまま先へ進む</button>
+    </div>
+  </div>`;
+  const advance = ()=>{ r.floor++; beginFloor(); };
+  qs('#btn-rest-heal').onclick = ()=>{
+    r.player.hp = Math.min(r.player.maxHp, r.player.hp + healAmt);
+    advance();
+  };
+  qs('#btn-rest-skip').onclick = advance;
+}
+
+/* ============================= REWARD SCREEN ============================= */
+
+function renderReward(){
+  const r = S.run;
+  const choices = threeRewardCards();
+  app().innerHTML = `
+  <div class="screen center-screen">
+    <p class="eyebrow">VICTORY</p>
+    <h2>戦利品を選べ</h2>
+    <p style="color:var(--parchment-dim); margin-top:6px;">1枚選んでデッキに加えるか、スキップできる。</p>
+    <div class="reward-row" id="reward-row">
+      ${choices.map((c,i)=>`<div data-idx="${i}">${renderCardHTML(c)}</div>`).join('')}
+    </div>
+    <button class="ghost" id="btn-skip">受け取らずに進む</button>
+  </div>`;
+  qsa('#reward-row > div').forEach(wrap=>{
+    wrap.querySelector('.card').onclick = ()=>{
+      const idx = parseInt(wrap.dataset.idx,10);
+      r.discard.push(choices[idx].id);
+      r.floor++;
+      beginFloor();
+    };
+  });
+  qs('#btn-skip').onclick = ()=>{ r.floor++; beginFloor(); };
+}
+
+/* ============================= VICTORY / DEFEAT ============================= */
+
+function renderVictory(){
+  app().innerHTML = `
+  <div class="screen center-screen">
+    <p class="eyebrow">THE CODEX CLOSES</p>
+    <h2>探索を制覇した！</h2>
+    <p style="color:var(--parchment-dim); margin-top:10px;">全${S.settings.floorCount}階層を踏破し、灰燼の書庫を鎮めた。</p>
+    <div style="margin-top:26px;"><button class="primary" id="btn-home">ホームへ戻る</button></div>
+  </div>`;
+  qs('#btn-home').onclick = ()=>{ S.screen='home'; renderHome(); };
+}
+function renderDefeat(){
+  const r = S.run;
+  app().innerHTML = `
+  <div class="screen center-screen">
+    <p class="eyebrow">THE ASH CLAIMS YOU</p>
+    <h2>力尽きた…</h2>
+    <p style="color:var(--parchment-dim); margin-top:10px;">${r.floor}階層目で倒れた。</p>
+    <div style="margin-top:26px;"><button class="primary" id="btn-home">ホームへ戻る</button></div>
+  </div>`;
+  qs('#btn-home').onclick = ()=>{ S.screen='home'; renderHome(); };
+}
+
+/* ============================= BOOT ============================= */
+
+async function boot(){
+  app().innerHTML = `<div class="center-screen"><p class="eyebrow">LOADING</p><h2>書庫を開いている…</h2></div>`;
+  S.cards = loadCards();
+  if(!S.cards || S.cards.length===0) S.cards = DEFAULT_CARDS;
+  S.settings = loadSettings();
+  S.screen='home';
+  renderHome();
+}
 boot();
-})();
 
+})();
 </script>
 </body>
 </html>
