@@ -275,10 +275,23 @@ const RARITY_WEIGHT = {common:60, uncommon:30, rare:10};
 
 /* ============================= STORAGE ============================= */
 
+// Older saves may have "timing"/"triggerTag"/"duration" nested inside cardOp
+// (from before those settings applied to the whole card). Lift them to the top level.
+function migrateCard(c){
+  if(c && c.cardOp && c.cardOp.timing!==undefined){
+    if(c.timing===undefined) c.timing = c.cardOp.timing;
+    if(c.triggerTag===undefined) c.triggerTag = c.cardOp.triggerTag;
+    if(c.duration===undefined) c.duration = c.cardOp.duration;
+    delete c.cardOp.timing;
+    delete c.cardOp.triggerTag;
+    delete c.cardOp.duration;
+  }
+  return c;
+}
 function loadCards(){
   try{
     const value = localStorage.getItem('cards');
-    if(value) return JSON.parse(value);
+    if(value) return JSON.parse(value).map(migrateCard);
   }catch(e){ console.error(e); }
   return DEFAULT_CARDS;
 }
@@ -318,7 +331,31 @@ const S = {
   editingIsNew: false,
 };
 
-function isUpgradedInstanceId(id){ return typeof id==='string' && id.endsWith('+'); }
+// A pile entry is normally just a card id string (e.g. "strike" or "strike+" once
+// upgraded). When a card grants an effect to another card (cardOp type "grantBuff"),
+// that specific physical copy needs its own identity so the bonus doesn't leak onto
+// every other copy of the same card. We do this by suffixing the raw id with
+// "::<instanceId>" and storing the actual bonus numbers in S.run.instanceBuffs,
+// keyed by that instance id. Every other part of the game keeps treating pile
+// entries as opaque strings (splice/indexOf/etc. all still work unchanged) — only
+// cardById() needs to know how to unpack the suffix.
+function splitInstanceId(raw){
+  if(typeof raw!=='string') return {cid:raw, iid:null};
+  const idx = raw.lastIndexOf('::');
+  if(idx===-1) return {cid:raw, iid:null};
+  return {cid:raw.slice(0,idx), iid:raw.slice(idx+2)};
+}
+function withInstanceSuffix(cid, iid){ return iid ? (cid+'::'+iid) : cid; }
+function upgradeRawId(raw){
+  const {cid, iid} = splitInstanceId(raw);
+  if(cid.endsWith('+')) return raw;
+  return withInstanceSuffix(cid+'+', iid);
+}
+
+function isUpgradedInstanceId(raw){
+  const cid = splitInstanceId(raw).cid;
+  return typeof cid==='string' && cid.endsWith('+');
+}
 
 function upgradedCardView(base){
   const up = {...base, id: base.id+'+', name: base.name+'+', baseId: base.id};
@@ -339,11 +376,22 @@ function upgradedCardView(base){
 }
 
 function cardById(id){
-  if(isUpgradedInstanceId(id)){
-    const base = S.cards.find(c=>c.id===id.slice(0,-1));
-    return base ? upgradedCardView(base) : null;
+  const {cid, iid} = splitInstanceId(id);
+  let card;
+  if(isUpgradedInstanceId(cid)){
+    const base = S.cards.find(c=>c.id===cid.slice(0,-1));
+    card = base ? upgradedCardView(base) : null;
+  } else {
+    card = S.cards.find(c=>c.id===cid);
   }
-  return S.cards.find(c=>c.id===id);
+  if(!card) return null;
+  const buffs = iid && S.run && S.run.instanceBuffs && S.run.instanceBuffs[iid];
+  if(buffs && Object.keys(buffs).length){
+    const merged = {...card};
+    Object.keys(buffs).forEach(k=>{ merged[k] = (merged[k]||0) + buffs[k]; });
+    return merged;
+  }
+  return card;
 }
 
 /* ============================= CARD TEXT ============================= */
@@ -370,14 +418,24 @@ function cardDescription(c){
     const pileLabel = (PILE_OPTIONS.find(p=>p.key===c.cardOp.fromPile)||{}).label || c.cardOp.fromPile;
     const countText = c.cardOp.countMode==='all' ? '対象すべて' : (c.cardOp.countMode==='random' ? `${c.cardOp.countMin}〜${c.cardOp.countMax}枚` : `${c.cardOp.countFixed}枚`);
     const tagText = c.cardOp.filterTag ? `[${c.cardOp.filterTag}]の` : '';
-    const timingText = c.cardOp.timing==='trigger'
-      ? `今後${c.cardOp.triggerTag?`[${c.cardOp.triggerTag}]`:'任意の'}カードを使うたび（${c.cardOp.duration==='turn'?'このターンのみ':'この戦闘中'}）`
-      : '即時';
-    parts.push(`${timingText}: ${pileLabel}の${tagText}カードを${countText}${typeLabel}`);
+    if(c.cardOp.type==='grantBuff'){
+      const fieldDef = EFFECT_FIELD_DEFS.find(d=>d.key===c.cardOp.buffField);
+      const fieldLabel = fieldDef ? fieldDef.label : c.cardOp.buffField;
+      const amt = c.cardOp.buffAmount||0;
+      parts.push(`${pileLabel}の${tagText}カードを${countText}選び、「${fieldLabel}」を${amt>=0?'+':''}${amt}する`);
+    } else {
+      parts.push(`${pileLabel}の${tagText}カードを${countText}${typeLabel}`);
+    }
   }
   if(c.tags && c.tags.length) parts.push(`タグ: ${c.tags.join(', ')}`);
   if(c.exhaust) parts.push(`(使用後: 消滅)`);
-  return parts.length ? parts.join('。')+'。' : '効果なし';
+  let desc = parts.length ? parts.join('。')+'。' : '効果なし';
+  if(c.timing==='trigger'){
+    const tagPart = c.triggerTag ? `[${c.triggerTag}]` : '任意の';
+    const durPart = c.duration==='turn' ? 'このターンのみ' : 'この戦闘中';
+    desc = `【仕込み】今後${tagPart}カードを使うたびに発動（${durPart}）: ` + desc;
+  }
+  return desc;
 }
 
 /* ============================= RENDER HELPERS ============================= */
@@ -565,6 +623,8 @@ const CARDOP_TYPES = [
   {key:'moveToExhausted', label:'消滅させる'},
   {key:'upgrade', label:'その場で強化する'},
   {key:'duplicate', label:'複製する（捨て札に複製を追加）'},
+  {key:'play', label:'コストを消費せず使用する'},
+  {key:'grantBuff', label:'カードに効果を付与する'},
 ];
 const PILE_OPTIONS = [
   {key:'hand', label:'手札'},
@@ -600,13 +660,53 @@ function resolveCardOp(r, op){
   if(candidateIdx.length===0) return;
 
   if(op.type==='upgrade'){
-    candidateIdx.forEach(i=>{ pile[i] = pile[i] + '+'; });
+    candidateIdx.forEach(i=>{ pile[i] = upgradeRawId(pile[i]); });
     pushLog(`${candidateIdx.length}枚のカードを強化した。`);
     return;
   }
   if(op.type==='duplicate'){
-    candidateIdx.forEach(i=>{ r.discard.push(pile[i]); });
+    // A duplicate is a fresh, unbuffed copy of the base card — it does not inherit
+    // any per-instance buff granted to the original physical card.
+    candidateIdx.forEach(i=>{ r.discard.push(splitInstanceId(pile[i]).cid); });
     pushLog(`${candidateIdx.length}枚のカードを複製した。`);
+    return;
+  }
+  if(op.type==='grantBuff'){
+    const field = op.buffField; const amount = op.buffAmount||0;
+    if(field && amount){
+      candidateIdx.forEach(i=>{
+        const {cid, iid} = splitInstanceId(pile[i]);
+        let useIid = iid;
+        if(!useIid){ useIid = newId(); r.instanceBuffs[useIid] = {}; }
+        r.instanceBuffs[useIid][field] = (r.instanceBuffs[useIid][field]||0) + amount;
+        pile[i] = withInstanceSuffix(cid, useIid);
+      });
+      const fieldDef = EFFECT_FIELD_DEFS.find(d=>d.key===field);
+      pushLog(`${candidateIdx.length}枚のカードに「${fieldDef?fieldDef.label:field}」${amount>=0?'+':''}${amount}を付与した。`);
+    }
+    return;
+  }
+  if(op.type==='play'){
+    // Auto-play the targeted cards for free (no energy cost, not counted as
+    // hand-play). Guard against runaway chains (a card auto-playing cards that
+    // in turn auto-play more cards) with a small recursion depth cap.
+    const rawIds = candidateIdx.map(i=> pile.splice(i,1)[0]);
+    let playedCount = 0;
+    rawIds.forEach(rawId=>{
+      const cc = cardById(rawId);
+      if(!cc){ return; }
+      if((r._autoPlayDepth||0) >= 4){
+        pushLog(`${cc.name}: 連鎖が深すぎるため発動を打ち切った。`);
+        r.discard.push(rawId);
+        return;
+      }
+      r._autoPlayDepth = (r._autoPlayDepth||0) + 1;
+      resolveCardPlayCore(r, cc);
+      r._autoPlayDepth -= 1;
+      playedCount++;
+      if(cc.exhaust) r.exhausted.push(rawId); else r.discard.push(rawId);
+    });
+    if(playedCount>0) pushLog(`${playedCount}枚のカードをコストなしで使用した。`);
     return;
   }
   const destMap = {moveToHand:'hand', moveToDiscard:'discard', moveToDraw:'draw', moveToExhausted:'exhausted'};
@@ -618,11 +718,86 @@ function resolveCardOp(r, op){
   pushLog(`${moved.length}枚のカードを移動した。`);
 }
 
+// Applies a card's own numeric effects (damage/block/draw/buffs/debuffs/card-op...),
+// repeated according to its "hits" field. This is shared by a normal hand-play, by a
+// trigger firing later, and by cardOp's "play" (free auto-play) type.
+function applyCardEffects(r, c){
+  const replays = Math.max(1, (c.hits||1) + scaleBonus(c,'hits'));
+  for(let rep=0; rep<replays; rep++){
+    const dmgVal = Math.max(0, (c.damage||0) + scaleBonus(c,'damage'));
+    if(dmgVal>0){
+      const dealt = applyDamageToEnemy(dmgVal + r.player.strength + r.player.permStrength, c.pierce);
+      pushLog(`${c.name}: 敵に${dealt}ダメージ${c.pierce?'（貫通）':''}。`);
+      if(c.lifesteal && dealt>0){ r.player.hp = Math.min(r.player.maxHp, r.player.hp + dealt); }
+    }
+    const blockVal = Math.max(0, (c.block||0) + scaleBonus(c,'block'));
+    if(blockVal>0){ r.player.block += blockVal; pushLog(`${c.name}: ブロック+${blockVal}。`); }
+    const drawVal = Math.max(0, (c.draw||0) + scaleBonus(c,'draw'));
+    if(drawVal>0){ drawCards(drawVal); pushLog(`${c.name}: カードを${drawVal}枚引いた。`); }
+    const energyVal = (c.energy||0) + scaleBonus(c,'energy');
+    if(energyVal){ r.player.energy += energyVal; }
+    const strengthVal = Math.max(0, (c.strength||0) + scaleBonus(c,'strength'));
+    if(strengthVal>0){ r.player.strength += strengthVal; pushLog(`${c.name}: 強化+${strengthVal}（この戦闘中）。`); }
+    const permStrengthVal = Math.max(0, (c.permStrength||0) + scaleBonus(c,'permStrength'));
+    if(permStrengthVal>0){ r.player.permStrength += permStrengthVal; pushLog(`${c.name}: 強化+${permStrengthVal}（永続）。`); }
+    const metallicizeVal = Math.max(0, (c.metallicize||0) + scaleBonus(c,'metallicize'));
+    if(metallicizeVal>0){ r.player.metallicize += metallicizeVal; }
+    const permMetallicizeVal = Math.max(0, (c.permMetallicize||0) + scaleBonus(c,'permMetallicize'));
+    if(permMetallicizeVal>0){ r.player.permMetallicize += permMetallicizeVal; }
+    const thornsVal = Math.max(0, (c.thorns||0) + scaleBonus(c,'thorns'));
+    if(thornsVal>0){ r.player.thorns += thornsVal; }
+    const permThornsVal = Math.max(0, (c.permThorns||0) + scaleBonus(c,'permThorns'));
+    if(permThornsVal>0){ r.player.permThorns += permThornsVal; }
+    const weakVal = Math.max(0, (c.weak||0) + scaleBonus(c,'weak'));
+    if(weakVal>0){ r.enemy.weak += weakVal; }
+    const vulnVal = Math.max(0, (c.vulnerable||0) + scaleBonus(c,'vulnerable'));
+    if(vulnVal>0){ r.enemy.vulnerable += vulnVal; }
+    const poisonVal = Math.max(0, (c.poison||0) + scaleBonus(c,'poison'));
+    if(poisonVal>0){ r.enemy.poison += poisonVal; }
+    const healVal = Math.max(0, (c.heal||0) + scaleBonus(c,'heal'));
+    if(healVal>0){ r.player.hp = Math.min(r.player.maxHp, r.player.hp + healVal); }
+    const loseHpVal = Math.max(0, (c.loseHp||0) + scaleBonus(c,'loseHp'));
+    if(loseHpVal>0){ r.player.hp = Math.max(0, r.player.hp - loseHpVal); }
+
+    if(c.cardOp && c.cardOp.enabled){
+      resolveCardOp(r, c.cardOp);
+    }
+
+    if(r.enemy.hp<=0 || r.player.hp<=0) break;
+  }
+}
+
+// Shared "this card is now being used" bookkeeping: play-count/tag tracking, letting
+// existing trigger-cards react, then either resolving the effect immediately or
+// registering it as a new trigger, depending on the card's own timing setting.
+function resolveCardPlayCore(r, c){
+  r.cardsPlayedThisTurn = (r.cardsPlayedThisTurn||0) + 1;
+  if(c.tags && c.tags.length){ r.tagsPlayedThisTurn = (r.tagsPlayedThisTurn||[]).concat(c.tags); }
+
+  // Existing triggers (registered by earlier cards this combat/turn) react to this play,
+  // before this card's own trigger (if any) is registered below.
+  fireMatchingTriggers(r, c);
+
+  if(c.timing === 'trigger'){
+    r.activeTriggers.push({
+      triggerTag: c.triggerTag || '',
+      duration: c.duration || 'combat',
+      cardData: c,
+    });
+    pushLog(`${c.name}: 効果を仕込んだ（今後の該当カード使用時に発動）。`);
+  } else {
+    applyCardEffects(r, c);
+  }
+}
+
 function fireMatchingTriggers(r, playedCard){
   if(!r.activeTriggers || r.activeTriggers.length===0) return;
-  r.activeTriggers.forEach(trig=>{
+  // Snapshot first: resolving a trigger can itself register new triggers (e.g. via a
+  // chained "play" cardOp), and those shouldn't fire again within this same pass.
+  const snapshot = r.activeTriggers.slice();
+  snapshot.forEach(trig=>{
     const tagOk = !trig.triggerTag || (playedCard.tags && playedCard.tags.includes(trig.triggerTag));
-    if(tagOk) resolveCardOp(r, trig.action);
+    if(tagOk) applyCardEffects(r, trig.cardData);
   });
 }
 
@@ -813,6 +988,22 @@ function openCardModal(card, isNew){
         <div class="field"><label>開始デッキの枚数</label><input type="number" id="m-startcount" value="${c.startingCount||0}" min="0" max="10"></div>
       </div>
       <div class="field"><label>アップグレード時のコスト変化</label><input type="number" id="m-costdelta" value="${(c.upgrades&&c.upgrades.costDelta)||0}" min="-6" max="6"></div>
+      <div class="section-label">発動タイミング（カードの効果全体に適用）</div>
+      <div class="field"><label>発動タイミング</label>
+        <select id="m-timing">
+          <option value="immediate" ${(!c.timing||c.timing==='immediate')?'selected':''}>即時発動</option>
+          <option value="trigger" ${c.timing==='trigger'?'selected':''}>トリガー発動（後で指定タグのカードを使うたび）</option>
+        </select>
+      </div>
+      <div id="timing-trigger-fields" style="${c.timing==='trigger'?'':'display:none;'}">
+        <div class="field"><label>発動条件（このタグのカードを使うたび。空欄でどのカードでも）</label><input type="text" id="m-triggertag" value="${c.triggerTag||''}"></div>
+        <div class="field"><label>持続期間</label>
+          <select id="m-duration">
+            <option value="turn" ${c.duration==='turn'?'selected':''}>このターンのみ</option>
+            <option value="combat" ${(!c.duration||c.duration!=='turn')?'selected':''}>この戦闘中</option>
+          </select>
+        </div>
+      </div>
       <div class="section-label">効果</div>
       ${EFFECT_FIELD_DEFS.map(def=>{
         const sc = c.scales && c.scales[def.key];
@@ -856,20 +1047,6 @@ function openCardModal(card, isNew){
       <div class="section-label">カード操作（発展効果）</div>
       <div class="checkbox-field"><input type="checkbox" id="m-op-enabled" ${c.cardOp&&c.cardOp.enabled?'checked':''}><label for="m-op-enabled">カード操作を有効にする</label></div>
       <div id="op-config" style="${c.cardOp&&c.cardOp.enabled?'':'display:none;'} padding:10px; background:var(--bg-void); border:1px solid var(--line); border-radius:4px; margin-bottom:12px;">
-        <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">発動タイミング</div>
-        <select id="m-op-timing" style="margin-bottom:8px; width:100%;">
-          <option value="immediate" ${(!c.cardOp||c.cardOp.timing==='immediate')?'selected':''}>即時発動</option>
-          <option value="trigger" ${c.cardOp&&c.cardOp.timing==='trigger'?'selected':''}>トリガー発動（後で指定タグのカードを使うたび）</option>
-        </select>
-        <div id="op-trigger-fields" style="${c.cardOp&&c.cardOp.timing==='trigger'?'':'display:none;'}">
-          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">発動条件（このタグのカードを使うたび。空欄でどのカードでも）</div>
-          <input type="text" id="m-op-triggertag" value="${(c.cardOp&&c.cardOp.triggerTag)||''}" style="margin-bottom:8px; width:100%;">
-          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">持続期間</div>
-          <select id="m-op-duration" style="margin-bottom:8px; width:100%;">
-            <option value="turn" ${c.cardOp&&c.cardOp.duration==='turn'?'selected':''}>このターンのみ</option>
-            <option value="combat" ${(!c.cardOp||c.cardOp.duration!=='turn')?'selected':''}>この戦闘中</option>
-          </select>
-        </div>
         <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">操作内容</div>
         <select id="m-op-type" style="margin-bottom:8px; width:100%;">
           ${CARDOP_TYPES.map(t=>`<option value="${t.key}" ${c.cardOp&&c.cardOp.type===t.key?'selected':''}>${t.label}</option>`).join('')}
@@ -900,6 +1077,14 @@ function openCardModal(card, isNew){
         </div>
         <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">対象タグ絞り込み（空欄で絞り込みなし）</div>
         <input type="text" id="m-op-filtertag" value="${(c.cardOp&&c.cardOp.filterTag)||''}" style="width:100%;">
+        <div id="op-buff-fields" style="${c.cardOp&&c.cardOp.type==='grantBuff'?'':'display:none;'} margin-top:10px;">
+          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">付与する効果</div>
+          <select id="m-op-bufffield" style="margin-bottom:8px; width:100%;">
+            ${EFFECT_FIELD_DEFS.map(def=>`<option value="${def.key}" ${c.cardOp&&c.cardOp.buffField===def.key?'selected':''}>${def.label}</option>`).join('')}
+          </select>
+          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">付与量（マイナスで減少も可）</div>
+          <input type="number" id="m-op-buffamount" value="${(c.cardOp&&c.cardOp.buffAmount)||0}" min="-99" max="99" style="width:100%;">
+        </div>
       </div>
       <div class="section-label">シナジー</div>
       <div class="field"><label>タグ（カンマ区切りで複数入力可）</label><input type="text" id="m-tags" value="${(c.tags||[]).join(', ')}" placeholder="例: 炎, 連撃"></div>
@@ -920,11 +1105,14 @@ function openCardModal(card, isNew){
       btn.textContent = showing ? '+参照増減' : '増減設定を編集';
     };
   });
+  qs('#m-timing',overlay).onchange = ()=>{
+    qs('#timing-trigger-fields',overlay).style.display = qs('#m-timing',overlay).value==='trigger' ? 'block' : 'none';
+  };
   qs('#m-op-enabled',overlay).onchange = ()=>{
     qs('#op-config',overlay).style.display = qs('#m-op-enabled',overlay).checked ? 'block' : 'none';
   };
-  qs('#m-op-timing',overlay).onchange = ()=>{
-    qs('#op-trigger-fields',overlay).style.display = qs('#m-op-timing',overlay).value==='trigger' ? 'block' : 'none';
+  qs('#m-op-type',overlay).onchange = ()=>{
+    qs('#op-buff-fields',overlay).style.display = qs('#m-op-type',overlay).value==='grantBuff' ? 'block' : 'none';
   };
   qs('#m-save',overlay).onclick = async ()=>{
     const updated = {
@@ -941,6 +1129,9 @@ function openCardModal(card, isNew){
       tags: (qs('#m-tags',overlay).value||'').split(',').map(s=>s.trim()).filter(Boolean),
       scales: {},
       upgrades: { costDelta: clampInt(qs('#m-costdelta',overlay).value,-6,6,0), scalePP: {} },
+      timing: qs('#m-timing',overlay).value,
+      triggerTag: (qs('#m-triggertag',overlay).value||'').trim(),
+      duration: qs('#m-duration',overlay).value,
     };
     EFFECT_FIELD_DEFS.forEach(def=>{
       const min = def.min!==undefined ? def.min : 0;
@@ -964,9 +1155,6 @@ function openCardModal(card, isNew){
     const opEnabled = qs('#m-op-enabled',overlay).checked;
     updated.cardOp = opEnabled ? {
       enabled: true,
-      timing: qs('#m-op-timing',overlay).value,
-      triggerTag: (qs('#m-op-triggertag',overlay).value||'').trim(),
-      duration: qs('#m-op-duration',overlay).value,
       type: qs('#m-op-type',overlay).value,
       fromPile: qs('#m-op-frompile',overlay).value,
       countMode: qs('#m-op-countmode',overlay).value,
@@ -974,6 +1162,8 @@ function openCardModal(card, isNew){
       countMin: clampInt(qs('#m-op-countmin',overlay).value,0,20,1),
       countMax: clampInt(qs('#m-op-countmax',overlay).value,0,20,1),
       filterTag: (qs('#m-op-filtertag',overlay).value||'').trim(),
+      buffField: qs('#m-op-bufffield',overlay).value,
+      buffAmount: clampInt(qs('#m-op-buffamount',overlay).value,-99,99,0),
     } : { enabled:false };
     if(isNew){ S.cards.push(updated); }
     else{ S.cards = S.cards.map(x=> x.id===updated.id? updated : x); }
@@ -1075,6 +1265,7 @@ function startRun(){
     tagsPlayedThisTurn:[],
     battlesSinceSpecial:0,
     activeTriggers:[],
+    instanceBuffs:{},
   };
   S.run.draw = shuffle(S.run.deck);
   S.run.deck = [];
@@ -1188,68 +1379,11 @@ function playCard(handIdx){
   const c = cardById(cardId);
   if(!c || c.cost > r.player.energy) return;
   r.player.energy -= c.cost;
-  r.cardsPlayedThisTurn = (r.cardsPlayedThisTurn||0) + 1;
-  if(c.tags && c.tags.length){ r.tagsPlayedThisTurn = (r.tagsPlayedThisTurn||[]).concat(c.tags); }
 
-  // Existing triggers (registered by earlier cards this combat/turn) react to this play,
-  // before this card's own trigger (if any) is registered below.
-  fireMatchingTriggers(r, c);
+  resolveCardPlayCore(r, c);
 
-  const replays = Math.max(1, (c.hits||1) + scaleBonus(c,'hits'));
-  for(let rep=0; rep<replays; rep++){
-    const dmgVal = Math.max(0, (c.damage||0) + scaleBonus(c,'damage'));
-    if(dmgVal>0){
-      const dealt = applyDamageToEnemy(dmgVal + r.player.strength + r.player.permStrength, c.pierce);
-      pushLog(`${c.name}: 敵に${dealt}ダメージ${c.pierce?'（貫通）':''}。`);
-      if(c.lifesteal && dealt>0){ r.player.hp = Math.min(r.player.maxHp, r.player.hp + dealt); }
-    }
-    const blockVal = Math.max(0, (c.block||0) + scaleBonus(c,'block'));
-    if(blockVal>0){ r.player.block += blockVal; pushLog(`${c.name}: ブロック+${blockVal}。`); }
-    const drawVal = Math.max(0, (c.draw||0) + scaleBonus(c,'draw'));
-    if(drawVal>0){ drawCards(drawVal); pushLog(`${c.name}: カードを${drawVal}枚引いた。`); }
-    const energyVal = (c.energy||0) + scaleBonus(c,'energy');
-    if(energyVal){ r.player.energy += energyVal; }
-    const strengthVal = Math.max(0, (c.strength||0) + scaleBonus(c,'strength'));
-    if(strengthVal>0){ r.player.strength += strengthVal; pushLog(`${c.name}: 強化+${strengthVal}（この戦闘中）。`); }
-    const permStrengthVal = Math.max(0, (c.permStrength||0) + scaleBonus(c,'permStrength'));
-    if(permStrengthVal>0){ r.player.permStrength += permStrengthVal; pushLog(`${c.name}: 強化+${permStrengthVal}（永続）。`); }
-    const metallicizeVal = Math.max(0, (c.metallicize||0) + scaleBonus(c,'metallicize'));
-    if(metallicizeVal>0){ r.player.metallicize += metallicizeVal; }
-    const permMetallicizeVal = Math.max(0, (c.permMetallicize||0) + scaleBonus(c,'permMetallicize'));
-    if(permMetallicizeVal>0){ r.player.permMetallicize += permMetallicizeVal; }
-    const thornsVal = Math.max(0, (c.thorns||0) + scaleBonus(c,'thorns'));
-    if(thornsVal>0){ r.player.thorns += thornsVal; }
-    const permThornsVal = Math.max(0, (c.permThorns||0) + scaleBonus(c,'permThorns'));
-    if(permThornsVal>0){ r.player.permThorns += permThornsVal; }
-    const weakVal = Math.max(0, (c.weak||0) + scaleBonus(c,'weak'));
-    if(weakVal>0){ r.enemy.weak += weakVal; }
-    const vulnVal = Math.max(0, (c.vulnerable||0) + scaleBonus(c,'vulnerable'));
-    if(vulnVal>0){ r.enemy.vulnerable += vulnVal; }
-    const poisonVal = Math.max(0, (c.poison||0) + scaleBonus(c,'poison'));
-    if(poisonVal>0){ r.enemy.poison += poisonVal; }
-    const healVal = Math.max(0, (c.heal||0) + scaleBonus(c,'heal'));
-    if(healVal>0){ r.player.hp = Math.min(r.player.maxHp, r.player.hp + healVal); }
-    const loseHpVal = Math.max(0, (c.loseHp||0) + scaleBonus(c,'loseHp'));
-    if(loseHpVal>0){ r.player.hp = Math.max(0, r.player.hp - loseHpVal); }
-
-    if(c.cardOp && c.cardOp.enabled && c.cardOp.timing!=='trigger'){
-      resolveCardOp(r, c.cardOp);
-    }
-
-    if(r.enemy.hp<=0 || r.player.hp<=0) break;
-  }
-
-  if(c.cardOp && c.cardOp.enabled && c.cardOp.timing==='trigger'){
-    r.activeTriggers.push({
-      triggerTag: c.cardOp.triggerTag || '',
-      duration: c.cardOp.duration || 'combat',
-      action: c.cardOp,
-    });
-    pushLog(`${c.name}: 効果を仕込んだ（今後の該当カード使用時に発動）。`);
-  }
-
-  // Remove by ID rather than the original handIdx: earlier cardOp effects in this
-  // resolution (draw/discard/etc.) may have shifted hand indices.
+  // Remove by ID rather than the original handIdx: cardOp effects resolved above
+  // (draw/discard/etc.) may have shifted hand indices.
   const finalIdx = r.hand.indexOf(cardId);
   if(finalIdx>=0) r.hand.splice(finalIdx,1);
   if(c.exhaust){ r.exhausted.push(cardId); }
@@ -1551,7 +1685,7 @@ const EVENT_TEMPLATES = [
       if(eligible.length===0) return '強化できるカードが見当たらなかった。';
       const inst = eligible[Math.floor(Math.random()*eligible.length)];
       const name = cardById(inst.cid).name;
-      r[inst.pile][inst.i] = inst.cid + '+';
+      r[inst.pile][inst.i] = upgradeRawId(inst.cid);
       return `${name}が鍛え直され、${name}+になった。`;
     }},
     {label:'礼を言って立ち去る（15ゴールド獲得）', apply:(r)=>{ r.player.gold+=15; return '鍛冶屋から餞別を受け取った。'; }},
@@ -1703,7 +1837,7 @@ function renderShop(){
       wrap.querySelector('.card').onclick = ()=>{
         const idx = parseInt(wrap.dataset.idx,10);
         const inst = upgradeEligible[idx];
-        r[inst.pile][inst.i] = inst.cid + '+';
+        r[inst.pile][inst.i] = upgradeRawId(inst.cid);
         r.player.gold -= 100;
         r.shopUpgradeMode = false;
         renderShop();
