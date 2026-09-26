@@ -365,6 +365,16 @@ function cardDescription(c){
   if(c.pierce) parts.push('ブロックを無視する（貫通）');
   if(c.lifesteal) parts.push('与えたダメージ分HP回復（吸血）');
   if(c.retain) parts.push('ターンをまたいで手札に残る（保持）');
+  if(c.cardOp && c.cardOp.enabled){
+    const typeLabel = (CARDOP_TYPES.find(t=>t.key===c.cardOp.type)||{}).label || c.cardOp.type;
+    const pileLabel = (PILE_OPTIONS.find(p=>p.key===c.cardOp.fromPile)||{}).label || c.cardOp.fromPile;
+    const countText = c.cardOp.countMode==='all' ? '対象すべて' : (c.cardOp.countMode==='random' ? `${c.cardOp.countMin}〜${c.cardOp.countMax}枚` : `${c.cardOp.countFixed}枚`);
+    const tagText = c.cardOp.filterTag ? `[${c.cardOp.filterTag}]の` : '';
+    const timingText = c.cardOp.timing==='trigger'
+      ? `今後${c.cardOp.triggerTag?`[${c.cardOp.triggerTag}]`:'任意の'}カードを使うたび（${c.cardOp.duration==='turn'?'このターンのみ':'この戦闘中'}）`
+      : '即時';
+    parts.push(`${timingText}: ${pileLabel}の${tagText}カードを${countText}${typeLabel}`);
+  }
   if(c.tags && c.tags.length) parts.push(`タグ: ${c.tags.join(', ')}`);
   if(c.exhaust) parts.push(`(使用後: 消滅)`);
   return parts.length ? parts.join('。')+'。' : '効果なし';
@@ -545,6 +555,76 @@ const EFFECT_FIELD_DEFS = [
   {key:'loseHp', label:'自分へのダメージ（代償）', max:99, desc:(v)=>`自分に${v}ダメージ`},
   {key:'hits', label:'発動回数（カード効果をこの回数分繰り返す）', max:10, min:1, default:1, showIf:(v)=>v>1, desc:(v)=>`${v}回発動`},
 ];
+
+/* ============================= CARD OPERATIONS (advanced) ============================= */
+
+const CARDOP_TYPES = [
+  {key:'moveToHand', label:'手札に移動する'},
+  {key:'moveToDiscard', label:'捨て札に移動する'},
+  {key:'moveToDraw', label:'山札に加える（シャッフル）'},
+  {key:'moveToExhausted', label:'消滅させる'},
+  {key:'upgrade', label:'その場で強化する'},
+  {key:'duplicate', label:'複製する（捨て札に複製を追加）'},
+];
+const PILE_OPTIONS = [
+  {key:'hand', label:'手札'},
+  {key:'draw', label:'山札'},
+  {key:'discard', label:'捨て札'},
+  {key:'exhausted', label:'消滅済み'},
+];
+
+function resolveCardOp(r, op){
+  if(!op || !op.enabled) return;
+  const pileName = op.fromPile || 'hand';
+  const pile = r[pileName];
+  if(!pile) return;
+
+  let candidateIdx = pile.map((cid,i)=>i).filter(i=>{
+    if(!op.filterTag) return true;
+    const cc = cardById(pile[i]);
+    return cc && cc.tags && cc.tags.includes(op.filterTag);
+  });
+  if(op.type==='upgrade'){
+    candidateIdx = candidateIdx.filter(i=>!isUpgradedInstanceId(pile[i]));
+  }
+
+  let count;
+  if(op.countMode==='all') count = candidateIdx.length;
+  else if(op.countMode==='random'){
+    const lo = Math.min(op.countMin!==undefined?op.countMin:1, op.countMax!==undefined?op.countMax:1);
+    const hi = Math.max(op.countMin!==undefined?op.countMin:1, op.countMax!==undefined?op.countMax:1);
+    count = lo + Math.floor(Math.random()*(hi-lo+1));
+  } else count = op.countFixed!==undefined ? op.countFixed : 1;
+
+  candidateIdx = shuffle(candidateIdx).slice(0, Math.max(0,count)).sort((a,b)=>b-a);
+  if(candidateIdx.length===0) return;
+
+  if(op.type==='upgrade'){
+    candidateIdx.forEach(i=>{ pile[i] = pile[i] + '+'; });
+    pushLog(`${candidateIdx.length}枚のカードを強化した。`);
+    return;
+  }
+  if(op.type==='duplicate'){
+    candidateIdx.forEach(i=>{ r.discard.push(pile[i]); });
+    pushLog(`${candidateIdx.length}枚のカードを複製した。`);
+    return;
+  }
+  const destMap = {moveToHand:'hand', moveToDiscard:'discard', moveToDraw:'draw', moveToExhausted:'exhausted'};
+  const dest = destMap[op.type];
+  if(!dest) return;
+  const moved = candidateIdx.map(i=> pile.splice(i,1)[0]);
+  if(dest==='draw'){ r.draw = shuffle([...r.draw, ...moved]); }
+  else{ r[dest].push(...moved); }
+  pushLog(`${moved.length}枚のカードを移動した。`);
+}
+
+function fireMatchingTriggers(r, playedCard){
+  if(!r.activeTriggers || r.activeTriggers.length===0) return;
+  r.activeTriggers.forEach(trig=>{
+    const tagOk = !trig.triggerTag || (playedCard.tags && playedCard.tags.includes(trig.triggerTag));
+    if(tagOk) resolveCardOp(r, trig.action);
+  });
+}
 
 /* ============================= CARD EDITOR SCREEN ============================= */
 
@@ -773,6 +853,54 @@ function openCardModal(card, isNew){
       <div class="checkbox-field"><input type="checkbox" id="m-pierce" ${c.pierce?'checked':''}><label for="m-pierce">ブロックを無視する（貫通）</label></div>
       <div class="checkbox-field"><input type="checkbox" id="m-lifesteal" ${c.lifesteal?'checked':''}><label for="m-lifesteal">与えたダメージ分HPを回復する（吸血）</label></div>
       <div class="checkbox-field"><input type="checkbox" id="m-retain" ${c.retain?'checked':''}><label for="m-retain">ターンをまたいで手札に残る（保持）</label></div>
+      <div class="section-label">カード操作（発展効果）</div>
+      <div class="checkbox-field"><input type="checkbox" id="m-op-enabled" ${c.cardOp&&c.cardOp.enabled?'checked':''}><label for="m-op-enabled">カード操作を有効にする</label></div>
+      <div id="op-config" style="${c.cardOp&&c.cardOp.enabled?'':'display:none;'} padding:10px; background:var(--bg-void); border:1px solid var(--line); border-radius:4px; margin-bottom:12px;">
+        <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">発動タイミング</div>
+        <select id="m-op-timing" style="margin-bottom:8px; width:100%;">
+          <option value="immediate" ${(!c.cardOp||c.cardOp.timing==='immediate')?'selected':''}>即時発動</option>
+          <option value="trigger" ${c.cardOp&&c.cardOp.timing==='trigger'?'selected':''}>トリガー発動（後で指定タグのカードを使うたび）</option>
+        </select>
+        <div id="op-trigger-fields" style="${c.cardOp&&c.cardOp.timing==='trigger'?'':'display:none;'}">
+          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">発動条件（このタグのカードを使うたび。空欄でどのカードでも）</div>
+          <input type="text" id="m-op-triggertag" value="${(c.cardOp&&c.cardOp.triggerTag)||''}" style="margin-bottom:8px; width:100%;">
+          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">持続期間</div>
+          <select id="m-op-duration" style="margin-bottom:8px; width:100%;">
+            <option value="turn" ${c.cardOp&&c.cardOp.duration==='turn'?'selected':''}>このターンのみ</option>
+            <option value="combat" ${(!c.cardOp||c.cardOp.duration!=='turn')?'selected':''}>この戦闘中</option>
+          </select>
+        </div>
+        <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">操作内容</div>
+        <select id="m-op-type" style="margin-bottom:8px; width:100%;">
+          ${CARDOP_TYPES.map(t=>`<option value="${t.key}" ${c.cardOp&&c.cardOp.type===t.key?'selected':''}>${t.label}</option>`).join('')}
+        </select>
+        <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">対象の山</div>
+        <select id="m-op-frompile" style="margin-bottom:8px; width:100%;">
+          ${PILE_OPTIONS.map(p=>`<option value="${p.key}" ${c.cardOp&&c.cardOp.fromPile===p.key?'selected':''}>${p.label}</option>`).join('')}
+        </select>
+        <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">枚数の決め方</div>
+        <select id="m-op-countmode" style="margin-bottom:8px; width:100%;">
+          <option value="fixed" ${(!c.cardOp||c.cardOp.countMode==='fixed')?'selected':''}>固定数</option>
+          <option value="random" ${c.cardOp&&c.cardOp.countMode==='random'?'selected':''}>ランダムな範囲</option>
+          <option value="all" ${c.cardOp&&c.cardOp.countMode==='all'?'selected':''}>対象すべて</option>
+        </select>
+        <div style="display:flex; gap:6px; margin-bottom:8px;">
+          <div style="flex:1;">
+            <div style="font-size:10px; color:var(--parchment-dim);">固定数</div>
+            <input type="number" id="m-op-countfixed" value="${(c.cardOp&&c.cardOp.countFixed)||1}" min="0" max="20" style="width:100%;">
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:10px; color:var(--parchment-dim);">ランダム最小</div>
+            <input type="number" id="m-op-countmin" value="${(c.cardOp&&c.cardOp.countMin)||1}" min="0" max="20" style="width:100%;">
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:10px; color:var(--parchment-dim);">ランダム最大</div>
+            <input type="number" id="m-op-countmax" value="${(c.cardOp&&c.cardOp.countMax)||1}" min="0" max="20" style="width:100%;">
+          </div>
+        </div>
+        <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">対象タグ絞り込み（空欄で絞り込みなし）</div>
+        <input type="text" id="m-op-filtertag" value="${(c.cardOp&&c.cardOp.filterTag)||''}" style="width:100%;">
+      </div>
       <div class="section-label">シナジー</div>
       <div class="field"><label>タグ（カンマ区切りで複数入力可）</label><input type="text" id="m-tags" value="${(c.tags||[]).join(', ')}" placeholder="例: 炎, 連撃"></div>
       <div class="modal-actions">
@@ -792,6 +920,12 @@ function openCardModal(card, isNew){
       btn.textContent = showing ? '+参照増減' : '増減設定を編集';
     };
   });
+  qs('#m-op-enabled',overlay).onchange = ()=>{
+    qs('#op-config',overlay).style.display = qs('#m-op-enabled',overlay).checked ? 'block' : 'none';
+  };
+  qs('#m-op-timing',overlay).onchange = ()=>{
+    qs('#op-trigger-fields',overlay).style.display = qs('#m-op-timing',overlay).value==='trigger' ? 'block' : 'none';
+  };
   qs('#m-save',overlay).onclick = async ()=>{
     const updated = {
       id: c.id,
@@ -827,6 +961,20 @@ function openCardModal(card, isNew){
         };
       }
     });
+    const opEnabled = qs('#m-op-enabled',overlay).checked;
+    updated.cardOp = opEnabled ? {
+      enabled: true,
+      timing: qs('#m-op-timing',overlay).value,
+      triggerTag: (qs('#m-op-triggertag',overlay).value||'').trim(),
+      duration: qs('#m-op-duration',overlay).value,
+      type: qs('#m-op-type',overlay).value,
+      fromPile: qs('#m-op-frompile',overlay).value,
+      countMode: qs('#m-op-countmode',overlay).value,
+      countFixed: clampInt(qs('#m-op-countfixed',overlay).value,0,20,1),
+      countMin: clampInt(qs('#m-op-countmin',overlay).value,0,20,1),
+      countMax: clampInt(qs('#m-op-countmax',overlay).value,0,20,1),
+      filterTag: (qs('#m-op-filtertag',overlay).value||'').trim(),
+    } : { enabled:false };
     if(isNew){ S.cards.push(updated); }
     else{ S.cards = S.cards.map(x=> x.id===updated.id? updated : x); }
     saveCards(S.cards);
@@ -925,6 +1073,8 @@ function startRun(){
     pendingRelic:null,
     cardsPlayedThisTurn:0,
     tagsPlayedThisTurn:[],
+    battlesSinceSpecial:0,
+    activeTriggers:[],
   };
   S.run.draw = shuffle(S.run.deck);
   S.run.deck = [];
@@ -938,13 +1088,17 @@ function pushLog(msg){
 
 function beginFloor(){
   const r = S.run;
-  const isSpecial = (r.floor % 3 === 0) && (r.floor !== S.settings.floorCount) && (r.floor % S.settings.eliteEvery !== 0);
-  if(isSpecial){
+  if(r.battlesSinceSpecial===undefined) r.battlesSinceSpecial = 0;
+  const isBoss = r.floor === S.settings.floorCount;
+  const isElite = r.floor % S.settings.eliteEvery === 0;
+  if(!isBoss && !isElite && r.battlesSinceSpecial>=2){
+    r.battlesSinceSpecial = 0;
     const roll = Math.random();
     if(roll < 0.4){ S.screen='rest'; renderRest(); return; }
     else if(roll < 0.75){ S.screen='event'; renderEvent(); return; }
     else{ S.screen='shop'; renderShop(); return; }
   }
+  r.battlesSinceSpecial++;
   // Rebuild the full card pool for the new battle: everything in the draw pile,
   // hand, discard pile, and exhaust pile returns and gets reshuffled. This mirrors
   // standard deckbuilder behavior and prevents cards from being lost between floors.
@@ -959,6 +1113,7 @@ function beginFloor(){
   r.player.strength = 0;
   r.player.metallicize = 0;
   r.player.thorns = 0;
+  r.activeTriggers = [];
 
   r.enemy = makeEnemy(r.floor);
   r.player.block = 0;
@@ -1001,6 +1156,7 @@ function startPlayerTurn(first){
   r.player.energy = S.settings.energyPerTurn + (r.player.extraEnergy||0);
   r.cardsPlayedThisTurn = 0;
   r.tagsPlayedThisTurn = [];
+  if(r.activeTriggers) r.activeTriggers = r.activeTriggers.filter(t=>t.duration!=='turn');
   drawCards(S.settings.handSize + (r.player.extraDraw||0));
   r.turnPhase='player';
 }
@@ -1034,6 +1190,10 @@ function playCard(handIdx){
   r.player.energy -= c.cost;
   r.cardsPlayedThisTurn = (r.cardsPlayedThisTurn||0) + 1;
   if(c.tags && c.tags.length){ r.tagsPlayedThisTurn = (r.tagsPlayedThisTurn||[]).concat(c.tags); }
+
+  // Existing triggers (registered by earlier cards this combat/turn) react to this play,
+  // before this card's own trigger (if any) is registered below.
+  fireMatchingTriggers(r, c);
 
   const replays = Math.max(1, (c.hits||1) + scaleBonus(c,'hits'));
   for(let rep=0; rep<replays; rep++){
@@ -1072,10 +1232,26 @@ function playCard(handIdx){
     const loseHpVal = Math.max(0, (c.loseHp||0) + scaleBonus(c,'loseHp'));
     if(loseHpVal>0){ r.player.hp = Math.max(0, r.player.hp - loseHpVal); }
 
+    if(c.cardOp && c.cardOp.enabled && c.cardOp.timing!=='trigger'){
+      resolveCardOp(r, c.cardOp);
+    }
+
     if(r.enemy.hp<=0 || r.player.hp<=0) break;
   }
 
-  r.hand.splice(handIdx,1);
+  if(c.cardOp && c.cardOp.enabled && c.cardOp.timing==='trigger'){
+    r.activeTriggers.push({
+      triggerTag: c.cardOp.triggerTag || '',
+      duration: c.cardOp.duration || 'combat',
+      action: c.cardOp,
+    });
+    pushLog(`${c.name}: 効果を仕込んだ（今後の該当カード使用時に発動）。`);
+  }
+
+  // Remove by ID rather than the original handIdx: earlier cardOp effects in this
+  // resolution (draw/discard/etc.) may have shifted hand indices.
+  const finalIdx = r.hand.indexOf(cardId);
+  if(finalIdx>=0) r.hand.splice(finalIdx,1);
   if(c.exhaust){ r.exhausted.push(cardId); }
   else{ r.discard.push(cardId); }
 
