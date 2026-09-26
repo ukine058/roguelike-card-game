@@ -352,6 +352,29 @@ function upgradeRawId(raw){
   return withInstanceSuffix(cid+'+', iid);
 }
 
+// Cards created by a "generate" card-operation only exist for the current combat.
+// Their instance id is registered in r.temporaryCardIids; this strips any such card
+// out of every pile (and drops its buff record) once the fight is over.
+function purgeTemporaryCards(r){
+  if(!r.temporaryCardIids) { r.temporaryCardIids = {}; return; }
+  const isTemp = (rawId)=>{
+    const {iid} = splitInstanceId(rawId);
+    return !!(iid && r.temporaryCardIids[iid]);
+  };
+  ['hand','draw','discard','exhausted'].forEach(pileName=>{
+    if(!r[pileName]) return;
+    r[pileName] = r[pileName].filter(rawId=>{
+      if(isTemp(rawId)){
+        const {iid} = splitInstanceId(rawId);
+        if(r.instanceBuffs) delete r.instanceBuffs[iid];
+        return false;
+      }
+      return true;
+    });
+  });
+  r.temporaryCardIids = {};
+}
+
 function isUpgradedInstanceId(raw){
   const cid = splitInstanceId(raw).cid;
   return typeof cid==='string' && cid.endsWith('+');
@@ -406,7 +429,7 @@ function cardDescription(c){
     if(scale && scale.source && scale.source!=='none' && scale.perPoint){
       const src = SCALE_SOURCES.find(s=>s.key===scale.source);
       const label = src ? src.label : scale.source;
-      const tagPart = (scale.source==='tagCountHand'||scale.source==='tagCountPlayedThisTurn') && scale.tag ? `[${scale.tag}]` : '';
+      const tagPart = (scale.source==='tagCountHand'||scale.source==='tagCountPlayedThisTurn'||scale.source==='tagCountDrawDiscard') && scale.tag ? `[${scale.tag}]` : '';
       parts.push(`${def.label}: ${label}${tagPart}×${scale.perPoint}`);
     }
   });
@@ -414,17 +437,25 @@ function cardDescription(c){
   if(c.lifesteal) parts.push('与えたダメージ分HP回復（吸血）');
   if(c.retain) parts.push('ターンをまたいで手札に残る（保持）');
   if(c.cardOp && c.cardOp.enabled){
+    const isGenerate = GENERATE_TYPES.includes(c.cardOp.type);
     const typeLabel = (CARDOP_TYPES.find(t=>t.key===c.cardOp.type)||{}).label || c.cardOp.type;
-    const pileLabel = (PILE_OPTIONS.find(p=>p.key===c.cardOp.fromPile)||{}).label || c.cardOp.fromPile;
-    const countText = c.cardOp.countMode==='all' ? '対象すべて' : (c.cardOp.countMode==='random' ? `${c.cardOp.countMin}〜${c.cardOp.countMax}枚` : `${c.cardOp.countFixed}枚`);
+    const rangeLabel = isGenerate
+      ? ((GENERATE_POOL_OPTIONS.find(p=>p.key===c.cardOp.genPool)||{}).label || c.cardOp.genPool)
+      : ((PILE_OPTIONS.find(p=>p.key===c.cardOp.fromPile)||{}).label || c.cardOp.fromPile);
+    const countText = c.cardOp.countMode==='all' ? '対象すべて'
+      : c.cardOp.countMode==='choose' ? `任意の${c.cardOp.countFixed}枚`
+      : c.cardOp.countMode==='random' ? `${c.cardOp.countMin}〜${c.cardOp.countMax}枚`
+      : `${c.cardOp.countFixed}枚`;
     const tagText = c.cardOp.filterTag ? `[${c.cardOp.filterTag}]の` : '';
     if(c.cardOp.type==='grantBuff'){
       const fieldDef = EFFECT_FIELD_DEFS.find(d=>d.key===c.cardOp.buffField);
       const fieldLabel = fieldDef ? fieldDef.label : c.cardOp.buffField;
       const amt = c.cardOp.buffAmount||0;
-      parts.push(`${pileLabel}の${tagText}カードを${countText}選び、「${fieldLabel}」を${amt>=0?'+':''}${amt}する`);
+      parts.push(`${rangeLabel}の${tagText}カードを${countText}選び、「${fieldLabel}」を${amt>=0?'+':''}${amt}する`);
+    } else if(isGenerate){
+      parts.push(`${rangeLabel}${tagText?`（${tagText.slice(0,-1)}）`:''}から${countText}${typeLabel}`);
     } else {
-      parts.push(`${pileLabel}の${tagText}カードを${countText}${typeLabel}`);
+      parts.push(`${rangeLabel}の${tagText}カードを${countText}${typeLabel}`);
     }
   }
   if(c.tags && c.tags.length) parts.push(`タグ: ${c.tags.join(', ')}`);
@@ -557,6 +588,7 @@ const SCALE_SOURCES = [
   {key:'playerHandSize', label:'自分の手札枚数'},
   {key:'playerDrawSize', label:'自分の山札枚数'},
   {key:'playerDiscardSize', label:'自分の捨て札枚数'},
+  {key:'playerDrawDiscardSize', label:'自分の山札+捨て札枚数（合計）'},
   {key:'enemyWeak', label:'敵の弱体値'},
   {key:'enemyVulnerable', label:'敵の脆弱値'},
   {key:'enemyPoison', label:'敵の毒値'},
@@ -565,6 +597,7 @@ const SCALE_SOURCES = [
   {key:'cardsPlayedThisTurn', label:'このターンに使ったカード枚数'},
   {key:'tagCountHand', label:'手札内の指定タグ枚数'},
   {key:'tagCountPlayedThisTurn', label:'このターン使った指定タグ枚数'},
+  {key:'tagCountDrawDiscard', label:'山札+捨て札内の指定タグ枚数（合計）'},
 ];
 function scaleSourceValue(key, tag){
   const r = S.run; if(!r) return 0;
@@ -578,6 +611,7 @@ function scaleSourceValue(key, tag){
     case 'playerHandSize': return r.hand.length;
     case 'playerDrawSize': return r.draw.length;
     case 'playerDiscardSize': return r.discard.length;
+    case 'playerDrawDiscardSize': return r.draw.length + r.discard.length;
     case 'enemyWeak': return e ? e.weak : 0;
     case 'enemyVulnerable': return e ? e.vulnerable : 0;
     case 'enemyPoison': return e ? e.poison : 0;
@@ -586,6 +620,7 @@ function scaleSourceValue(key, tag){
     case 'cardsPlayedThisTurn': return r.cardsPlayedThisTurn || 0;
     case 'tagCountHand': return tag ? r.hand.filter(cid=>{ const c=cardById(cid); return c && c.tags && c.tags.includes(tag); }).length : 0;
     case 'tagCountPlayedThisTurn': return tag ? (r.tagsPlayedThisTurn||[]).filter(t=>t===tag).length : 0;
+    case 'tagCountDrawDiscard': return tag ? [...r.draw, ...r.discard].filter(cid=>{ const c=cardById(cid); return c && c.tags && c.tags.includes(tag); }).length : 0;
     default: return 0;
   }
 }
@@ -625,105 +660,232 @@ const CARDOP_TYPES = [
   {key:'duplicate', label:'複製する（捨て札に複製を追加）'},
   {key:'play', label:'コストを消費せず使用する'},
   {key:'grantBuff', label:'カードに効果を付与する'},
+  {key:'generateToHand', label:'カードを生成し、手札に加える'},
+  {key:'generateToDraw', label:'カードを生成し、山札に加える'},
+  {key:'generatePlay', label:'カードを生成し、コストを消費せず使用する'},
 ];
+const GENERATE_TYPES = ['generateToHand','generateToDraw','generatePlay'];
 const PILE_OPTIONS = [
   {key:'hand', label:'手札'},
   {key:'draw', label:'山札'},
   {key:'discard', label:'捨て札'},
   {key:'exhausted', label:'消滅済み'},
+  {key:'drawAndDiscard', label:'山札+捨て札（合算）'},
+];
+// A cardOp's "from pile" can point at more than one actual pile array at once
+// (currently just "drawAndDiscard"). This maps the selectable key to the real
+// r.<pile> array name(s) it draws candidates from.
+const PILE_SOURCES = {
+  hand: ['hand'], draw: ['draw'], discard: ['discard'], exhausted: ['exhausted'],
+  drawAndDiscard: ['draw','discard'],
+};
+const GENERATE_POOL_OPTIONS = [
+  {key:'normal', label:'通常のカードのみ（生成専用カードを除く）'},
+  {key:'exclusiveOnly', label:'生成専用カードのみ'},
+  {key:'any', label:'すべてのカード'},
 ];
 
-function resolveCardOp(r, op){
-  if(!op || !op.enabled) return;
-  const pileName = op.fromPile || 'hand';
-  const pile = r[pileName];
-  if(!pile) return;
-
-  let candidateIdx = pile.map((cid,i)=>i).filter(i=>{
-    if(!op.filterTag) return true;
-    const cc = cardById(pile[i]);
-    return cc && cc.tags && cc.tags.includes(op.filterTag);
+// Every candidate a cardOp can act on is represented the same way, whether it comes
+// from an existing pile (pile+idx known, so it can be moved/mutated in place) or from
+// the master card list for a "generate" op (pile/idx are null — it doesn't exist yet).
+function collectPileEntries(r, fromPileKey){
+  const pileNames = PILE_SOURCES[fromPileKey] || [fromPileKey];
+  const entries = [];
+  pileNames.forEach(pn=>{
+    const arr = r[pn];
+    if(!arr) return;
+    arr.forEach((rawId,i)=> entries.push({pile:pn, idx:i, rawId}));
   });
+  return entries;
+}
+function collectGeneratePool(op){
+  return S.cards.filter(c=>{
+    if(op.filterTag && !(c.tags && c.tags.includes(op.filterTag))) return false;
+    if(op.genPool==='exclusiveOnly') return !!c.generatedOnly;
+    if(op.genPool==='normal') return !c.generatedOnly;
+    return true; // 'any'
+  }).map(c=>({pile:null, idx:null, rawId:c.id}));
+}
+// Removes a set of already-selected entries from their source piles. Entries are
+// grouped by pile and spliced highest-index-first so earlier indices stay valid.
+function removeEntries(r, entries){
+  const byPile = {};
+  entries.forEach(e=>{ if(e.pile) (byPile[e.pile] = byPile[e.pile]||[]).push(e.idx); });
+  Object.keys(byPile).forEach(pileName=>{
+    byPile[pileName].sort((a,b)=>b-a).forEach(i=> r[pileName].splice(i,1));
+  });
+}
+function pickWithReplacement(entries, count){
+  const out = [];
+  if(entries.length===0) return out;
+  for(let i=0;i<count;i++) out.push(entries[Math.floor(Math.random()*entries.length)]);
+  return out;
+}
+
+// Resolves a single card-operation. Most operation types finish synchronously, but
+// countMode "choose" hands control to the player (via r.pendingChoice) and only calls
+// done() once they confirm a selection — so every caller of resolveCardOp must treat
+// it as asynchronous and continue its own work from inside `done`.
+function resolveCardOp(r, op, done){
+  if(!op || !op.enabled){ done(); return; }
+  const isGenerate = GENERATE_TYPES.includes(op.type);
+
+  let entries = isGenerate ? collectGeneratePool(op) : collectPileEntries(r, op.fromPile || 'hand');
+  if(!isGenerate && op.filterTag){
+    entries = entries.filter(e=>{
+      const cc = cardById(e.rawId);
+      return cc && cc.tags && cc.tags.includes(op.filterTag);
+    });
+  }
   if(op.type==='upgrade'){
-    candidateIdx = candidateIdx.filter(i=>!isUpgradedInstanceId(pile[i]));
+    entries = entries.filter(e=>!isUpgradedInstanceId(e.rawId));
+  }
+  if(entries.length===0){ done(); return; }
+
+  function finish(selected){
+    if(selected.length===0){ done(); return; }
+
+    if(isGenerate){
+      const newIds = selected.map(e=>{
+        const iid = newId();
+        r.temporaryCardIids[iid] = true;
+        return withInstanceSuffix(e.rawId, iid);
+      });
+      if(op.type==='generateToHand'){
+        r.hand.push(...newIds);
+        pushLog(`${newIds.length}枚のカードを生成し、手札に加えた。`);
+        done(); return;
+      }
+      if(op.type==='generateToDraw'){
+        r.draw = shuffle([...r.draw, ...newIds]);
+        pushLog(`${newIds.length}枚のカードを生成し、山札に加えた。`);
+        done(); return;
+      }
+      // generatePlay
+      pushLog(`${newIds.length}枚のカードを生成し、コストなしで使用した。`);
+      let gi=0;
+      (function nextGen(){
+        if(gi>=newIds.length){ done(); return; }
+        const rawId = newIds[gi++];
+        const cc = cardById(rawId);
+        if(!cc){ nextGen(); return; }
+        if((r._autoPlayDepth||0) >= 4){
+          pushLog(`${cc.name}: 連鎖が深すぎるため発動を打ち切った。`);
+          r.discard.push(rawId);
+          nextGen(); return;
+        }
+        r._autoPlayDepth = (r._autoPlayDepth||0) + 1;
+        resolveCardPlayCore(r, cc, ()=>{
+          r._autoPlayDepth -= 1;
+          if(cc.exhaust) r.exhausted.push(rawId); else r.discard.push(rawId);
+          nextGen();
+        });
+      })();
+      return;
+    }
+
+    if(op.type==='upgrade'){
+      selected.forEach(e=>{ r[e.pile][e.idx] = upgradeRawId(e.rawId); });
+      pushLog(`${selected.length}枚のカードを強化した。`);
+      done(); return;
+    }
+    if(op.type==='duplicate'){
+      // A duplicate is a fresh, unbuffed copy of the base card — it does not inherit
+      // any per-instance buff granted to the original physical card.
+      selected.forEach(e=>{ r.discard.push(splitInstanceId(e.rawId).cid); });
+      pushLog(`${selected.length}枚のカードを複製した。`);
+      done(); return;
+    }
+    if(op.type==='grantBuff'){
+      const field = op.buffField; const amount = op.buffAmount||0;
+      if(field && amount){
+        selected.forEach(e=>{
+          const {cid, iid} = splitInstanceId(e.rawId);
+          let useIid = iid;
+          if(!useIid){ useIid = newId(); r.instanceBuffs[useIid] = {}; }
+          r.instanceBuffs[useIid][field] = (r.instanceBuffs[useIid][field]||0) + amount;
+          r[e.pile][e.idx] = withInstanceSuffix(cid, useIid);
+        });
+        const fieldDef = EFFECT_FIELD_DEFS.find(d=>d.key===field);
+        pushLog(`${selected.length}枚のカードに「${fieldDef?fieldDef.label:field}」${amount>=0?'+':''}${amount}を付与した。`);
+      }
+      done(); return;
+    }
+    if(op.type==='play'){
+      // Auto-play the targeted cards for free (no energy cost, not counted as
+      // hand-play). Guard against runaway chains (a card auto-playing cards that
+      // in turn auto-play more cards) with a small recursion depth cap.
+      removeEntries(r, selected);
+      pushLog(`${selected.length}枚のカードをコストなしで使用した。`);
+      let pi=0;
+      (function nextPlay(){
+        if(pi>=selected.length){ done(); return; }
+        const e = selected[pi++];
+        const cc = cardById(e.rawId);
+        if(!cc){ nextPlay(); return; }
+        if((r._autoPlayDepth||0) >= 4){
+          pushLog(`${cc.name}: 連鎖が深すぎるため発動を打ち切った。`);
+          r.discard.push(e.rawId);
+          nextPlay(); return;
+        }
+        r._autoPlayDepth = (r._autoPlayDepth||0) + 1;
+        resolveCardPlayCore(r, cc, ()=>{
+          r._autoPlayDepth -= 1;
+          if(cc.exhaust) r.exhausted.push(e.rawId); else r.discard.push(e.rawId);
+          nextPlay();
+        });
+      })();
+      return;
+    }
+    const destMap = {moveToHand:'hand', moveToDiscard:'discard', moveToDraw:'draw', moveToExhausted:'exhausted'};
+    const dest = destMap[op.type];
+    if(!dest){ done(); return; }
+    removeEntries(r, selected);
+    const movedIds = selected.map(e=>e.rawId);
+    if(dest==='draw'){ r.draw = shuffle([...r.draw, ...movedIds]); }
+    else{ r[dest].push(...movedIds); }
+    pushLog(`${movedIds.length}枚のカードを移動した。`);
+    done();
+  }
+
+  if(op.countMode==='choose'){
+    const need = Math.min(Math.max(op.countFixed!==undefined?op.countFixed:1, 0), entries.length);
+    if(need<=0){ done(); return; }
+    r.pendingChoice = {
+      candidates: entries,
+      need,
+      selectedIdx: [],
+      onConfirm: (chosen)=>{ finish(chosen); },
+    };
+    renderBattle();
+    return;
   }
 
   let count;
-  if(op.countMode==='all') count = candidateIdx.length;
+  if(op.countMode==='all') count = entries.length;
   else if(op.countMode==='random'){
     const lo = Math.min(op.countMin!==undefined?op.countMin:1, op.countMax!==undefined?op.countMax:1);
     const hi = Math.max(op.countMin!==undefined?op.countMin:1, op.countMax!==undefined?op.countMax:1);
     count = lo + Math.floor(Math.random()*(hi-lo+1));
   } else count = op.countFixed!==undefined ? op.countFixed : 1;
 
-  candidateIdx = shuffle(candidateIdx).slice(0, Math.max(0,count)).sort((a,b)=>b-a);
-  if(candidateIdx.length===0) return;
-
-  if(op.type==='upgrade'){
-    candidateIdx.forEach(i=>{ pile[i] = upgradeRawId(pile[i]); });
-    pushLog(`${candidateIdx.length}枚のカードを強化した。`);
-    return;
-  }
-  if(op.type==='duplicate'){
-    // A duplicate is a fresh, unbuffed copy of the base card — it does not inherit
-    // any per-instance buff granted to the original physical card.
-    candidateIdx.forEach(i=>{ r.discard.push(splitInstanceId(pile[i]).cid); });
-    pushLog(`${candidateIdx.length}枚のカードを複製した。`);
-    return;
-  }
-  if(op.type==='grantBuff'){
-    const field = op.buffField; const amount = op.buffAmount||0;
-    if(field && amount){
-      candidateIdx.forEach(i=>{
-        const {cid, iid} = splitInstanceId(pile[i]);
-        let useIid = iid;
-        if(!useIid){ useIid = newId(); r.instanceBuffs[useIid] = {}; }
-        r.instanceBuffs[useIid][field] = (r.instanceBuffs[useIid][field]||0) + amount;
-        pile[i] = withInstanceSuffix(cid, useIid);
-      });
-      const fieldDef = EFFECT_FIELD_DEFS.find(d=>d.key===field);
-      pushLog(`${candidateIdx.length}枚のカードに「${fieldDef?fieldDef.label:field}」${amount>=0?'+':''}${amount}を付与した。`);
-    }
-    return;
-  }
-  if(op.type==='play'){
-    // Auto-play the targeted cards for free (no energy cost, not counted as
-    // hand-play). Guard against runaway chains (a card auto-playing cards that
-    // in turn auto-play more cards) with a small recursion depth cap.
-    const rawIds = candidateIdx.map(i=> pile.splice(i,1)[0]);
-    let playedCount = 0;
-    rawIds.forEach(rawId=>{
-      const cc = cardById(rawId);
-      if(!cc){ return; }
-      if((r._autoPlayDepth||0) >= 4){
-        pushLog(`${cc.name}: 連鎖が深すぎるため発動を打ち切った。`);
-        r.discard.push(rawId);
-        return;
-      }
-      r._autoPlayDepth = (r._autoPlayDepth||0) + 1;
-      resolveCardPlayCore(r, cc);
-      r._autoPlayDepth -= 1;
-      playedCount++;
-      if(cc.exhaust) r.exhausted.push(rawId); else r.discard.push(rawId);
-    });
-    if(playedCount>0) pushLog(`${playedCount}枚のカードをコストなしで使用した。`);
-    return;
-  }
-  const destMap = {moveToHand:'hand', moveToDiscard:'discard', moveToDraw:'draw', moveToExhausted:'exhausted'};
-  const dest = destMap[op.type];
-  if(!dest) return;
-  const moved = candidateIdx.map(i=> pile.splice(i,1)[0]);
-  if(dest==='draw'){ r.draw = shuffle([...r.draw, ...moved]); }
-  else{ r[dest].push(...moved); }
-  pushLog(`${moved.length}枚のカードを移動した。`);
+  const selected = isGenerate
+    ? pickWithReplacement(entries, Math.max(0,count))
+    : shuffle(entries.slice()).slice(0, Math.max(0,count));
+  finish(selected);
 }
 
 // Applies a card's own numeric effects (damage/block/draw/buffs/debuffs/card-op...),
 // repeated according to its "hits" field. This is shared by a normal hand-play, by a
-// trigger firing later, and by cardOp's "play" (free auto-play) type.
-function applyCardEffects(r, c){
+// trigger firing later, and by cardOp's "play"/"generatePlay" (free auto-play) types.
+// Continuation-passing: calls done() once every repetition (and any card-op inside it,
+// including ones that pause for a player choice) has fully resolved.
+function applyCardEffects(r, c, done){
   const replays = Math.max(1, (c.hits||1) + scaleBonus(c,'hits'));
-  for(let rep=0; rep<replays; rep++){
+  let rep = 0;
+  (function step(){
+    if(rep>=replays || r.enemy.hp<=0 || r.player.hp<=0){ done(); return; }
+    rep++;
     const dmgVal = Math.max(0, (c.damage||0) + scaleBonus(c,'damage'));
     if(dmgVal>0){
       const dealt = applyDamageToEnemy(dmgVal + r.player.strength + r.player.permStrength, c.pierce);
@@ -760,46 +922,55 @@ function applyCardEffects(r, c){
     if(loseHpVal>0){ r.player.hp = Math.max(0, r.player.hp - loseHpVal); }
 
     if(c.cardOp && c.cardOp.enabled){
-      resolveCardOp(r, c.cardOp);
+      resolveCardOp(r, c.cardOp, ()=>{
+        if(r.enemy.hp<=0 || r.player.hp<=0){ done(); return; }
+        step();
+      });
+    } else {
+      step();
     }
-
-    if(r.enemy.hp<=0 || r.player.hp<=0) break;
-  }
+  })();
 }
 
 // Shared "this card is now being used" bookkeeping: play-count/tag tracking, letting
 // existing trigger-cards react, then either resolving the effect immediately or
 // registering it as a new trigger, depending on the card's own timing setting.
-function resolveCardPlayCore(r, c){
+function resolveCardPlayCore(r, c, done){
   r.cardsPlayedThisTurn = (r.cardsPlayedThisTurn||0) + 1;
   if(c.tags && c.tags.length){ r.tagsPlayedThisTurn = (r.tagsPlayedThisTurn||[]).concat(c.tags); }
 
   // Existing triggers (registered by earlier cards this combat/turn) react to this play,
   // before this card's own trigger (if any) is registered below.
-  fireMatchingTriggers(r, c);
-
-  if(c.timing === 'trigger'){
-    r.activeTriggers.push({
-      triggerTag: c.triggerTag || '',
-      duration: c.duration || 'combat',
-      cardData: c,
-    });
-    pushLog(`${c.name}: 効果を仕込んだ（今後の該当カード使用時に発動）。`);
-  } else {
-    applyCardEffects(r, c);
-  }
+  fireMatchingTriggers(r, c, ()=>{
+    if(c.timing === 'trigger'){
+      r.activeTriggers.push({
+        triggerTag: c.triggerTag || '',
+        duration: c.duration || 'combat',
+        cardData: c,
+      });
+      pushLog(`${c.name}: 効果を仕込んだ（今後の該当カード使用時に発動）。`);
+      done();
+    } else {
+      applyCardEffects(r, c, done);
+    }
+  });
 }
 
-function fireMatchingTriggers(r, playedCard){
-  if(!r.activeTriggers || r.activeTriggers.length===0) return;
+function fireMatchingTriggers(r, playedCard, done){
+  if(!r.activeTriggers || r.activeTriggers.length===0){ done(); return; }
   // Snapshot first: resolving a trigger can itself register new triggers (e.g. via a
   // chained "play" cardOp), and those shouldn't fire again within this same pass.
   const snapshot = r.activeTriggers.slice();
-  snapshot.forEach(trig=>{
+  let idx = 0;
+  (function next(){
+    if(idx>=snapshot.length){ done(); return; }
+    const trig = snapshot[idx++];
     const tagOk = !trig.triggerTag || (playedCard.tags && playedCard.tags.includes(trig.triggerTag));
-    if(tagOk) applyCardEffects(r, trig.cardData);
-  });
+    if(tagOk) applyCardEffects(r, trig.cardData, next);
+    else next();
+  })();
 }
+
 
 /* ============================= CARD EDITOR SCREEN ============================= */
 
@@ -1044,6 +1215,7 @@ function openCardModal(card, isNew){
       <div class="checkbox-field"><input type="checkbox" id="m-pierce" ${c.pierce?'checked':''}><label for="m-pierce">ブロックを無視する（貫通）</label></div>
       <div class="checkbox-field"><input type="checkbox" id="m-lifesteal" ${c.lifesteal?'checked':''}><label for="m-lifesteal">与えたダメージ分HPを回復する（吸血）</label></div>
       <div class="checkbox-field"><input type="checkbox" id="m-retain" ${c.retain?'checked':''}><label for="m-retain">ターンをまたいで手札に残る（保持）</label></div>
+      <div class="checkbox-field"><input type="checkbox" id="m-generatedonly" ${c.generatedOnly?'checked':''}><label for="m-generatedonly">生成専用カード（初期デッキ・報酬・ショップに通常出現しない）</label></div>
       <div class="section-label">カード操作（発展効果）</div>
       <div class="checkbox-field"><input type="checkbox" id="m-op-enabled" ${c.cardOp&&c.cardOp.enabled?'checked':''}><label for="m-op-enabled">カード操作を有効にする</label></div>
       <div id="op-config" style="${c.cardOp&&c.cardOp.enabled?'':'display:none;'} padding:10px; background:var(--bg-void); border:1px solid var(--line); border-radius:4px; margin-bottom:12px;">
@@ -1051,19 +1223,28 @@ function openCardModal(card, isNew){
         <select id="m-op-type" style="margin-bottom:8px; width:100%;">
           ${CARDOP_TYPES.map(t=>`<option value="${t.key}" ${c.cardOp&&c.cardOp.type===t.key?'selected':''}>${t.label}</option>`).join('')}
         </select>
-        <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">対象の山</div>
-        <select id="m-op-frompile" style="margin-bottom:8px; width:100%;">
-          ${PILE_OPTIONS.map(p=>`<option value="${p.key}" ${c.cardOp&&c.cardOp.fromPile===p.key?'selected':''}>${p.label}</option>`).join('')}
-        </select>
+        <div id="op-frompile-field" style="${c.cardOp&&GENERATE_TYPES.includes(c.cardOp.type)?'display:none;':''}">
+          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">対象の山</div>
+          <select id="m-op-frompile" style="margin-bottom:8px; width:100%;">
+            ${PILE_OPTIONS.map(p=>`<option value="${p.key}" ${c.cardOp&&c.cardOp.fromPile===p.key?'selected':''}>${p.label}</option>`).join('')}
+          </select>
+        </div>
+        <div id="op-genpool-field" style="${c.cardOp&&GENERATE_TYPES.includes(c.cardOp.type)?'':'display:none;'}">
+          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">生成元プール</div>
+          <select id="m-op-genpool" style="margin-bottom:8px; width:100%;">
+            ${GENERATE_POOL_OPTIONS.map(p=>`<option value="${p.key}" ${c.cardOp&&c.cardOp.genPool===p.key?'selected':''}>${p.label}</option>`).join('')}
+          </select>
+        </div>
         <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">枚数の決め方</div>
         <select id="m-op-countmode" style="margin-bottom:8px; width:100%;">
           <option value="fixed" ${(!c.cardOp||c.cardOp.countMode==='fixed')?'selected':''}>固定数</option>
           <option value="random" ${c.cardOp&&c.cardOp.countMode==='random'?'selected':''}>ランダムな範囲</option>
           <option value="all" ${c.cardOp&&c.cardOp.countMode==='all'?'selected':''}>対象すべて</option>
+          <option value="choose" ${c.cardOp&&c.cardOp.countMode==='choose'?'selected':''}>プレイヤーが任意に選ぶ</option>
         </select>
         <div style="display:flex; gap:6px; margin-bottom:8px;">
           <div style="flex:1;">
-            <div style="font-size:10px; color:var(--parchment-dim);">固定数</div>
+            <div style="font-size:10px; color:var(--parchment-dim);">固定数 / 選ぶ枚数</div>
             <input type="number" id="m-op-countfixed" value="${(c.cardOp&&c.cardOp.countFixed)||1}" min="0" max="20" style="width:100%;">
           </div>
           <div style="flex:1;">
@@ -1112,7 +1293,11 @@ function openCardModal(card, isNew){
     qs('#op-config',overlay).style.display = qs('#m-op-enabled',overlay).checked ? 'block' : 'none';
   };
   qs('#m-op-type',overlay).onchange = ()=>{
-    qs('#op-buff-fields',overlay).style.display = qs('#m-op-type',overlay).value==='grantBuff' ? 'block' : 'none';
+    const t = qs('#m-op-type',overlay).value;
+    qs('#op-buff-fields',overlay).style.display = t==='grantBuff' ? 'block' : 'none';
+    const isGen = GENERATE_TYPES.includes(t);
+    qs('#op-frompile-field',overlay).style.display = isGen ? 'none' : 'block';
+    qs('#op-genpool-field',overlay).style.display = isGen ? 'block' : 'none';
   };
   qs('#m-save',overlay).onclick = async ()=>{
     const updated = {
@@ -1126,6 +1311,7 @@ function openCardModal(card, isNew){
       pierce: qs('#m-pierce',overlay).checked,
       lifesteal: qs('#m-lifesteal',overlay).checked,
       retain: qs('#m-retain',overlay).checked,
+      generatedOnly: qs('#m-generatedonly',overlay).checked,
       tags: (qs('#m-tags',overlay).value||'').split(',').map(s=>s.trim()).filter(Boolean),
       scales: {},
       upgrades: { costDelta: clampInt(qs('#m-costdelta',overlay).value,-6,6,0), scalePP: {} },
@@ -1157,6 +1343,7 @@ function openCardModal(card, isNew){
       enabled: true,
       type: qs('#m-op-type',overlay).value,
       fromPile: qs('#m-op-frompile',overlay).value,
+      genPool: qs('#m-op-genpool',overlay).value,
       countMode: qs('#m-op-countmode',overlay).value,
       countFixed: clampInt(qs('#m-op-countfixed',overlay).value,0,20,1),
       countMin: clampInt(qs('#m-op-countmin',overlay).value,0,20,1),
@@ -1178,6 +1365,7 @@ function openCardModal(card, isNew){
 function buildStartingDeck(){
   const deck = [];
   S.cards.forEach(c=>{
+    if(c.generatedOnly) return;
     for(let i=0;i<(c.startingCount||0);i++) deck.push(c.id);
   });
   if(deck.length===0){ // fallback safety
@@ -1187,7 +1375,7 @@ function buildStartingDeck(){
 }
 
 function weightedPickCard(excludeIds){
-  const pool = S.cards.filter(c=> c.rarity!=='basic' && !excludeIds.includes(c.id));
+  const pool = S.cards.filter(c=> c.rarity!=='basic' && !c.generatedOnly && !excludeIds.includes(c.id));
   if(pool.length===0) return null;
   const total = pool.reduce((s,c)=> s + (RARITY_WEIGHT[c.rarity]||10), 0);
   let r = Math.random()*total;
@@ -1266,6 +1454,7 @@ function startRun(){
     battlesSinceSpecial:0,
     activeTriggers:[],
     instanceBuffs:{},
+    temporaryCardIids:{},
   };
   S.run.draw = shuffle(S.run.deck);
   S.run.deck = [];
@@ -1293,6 +1482,7 @@ function beginFloor(){
   // Rebuild the full card pool for the new battle: everything in the draw pile,
   // hand, discard pile, and exhaust pile returns and gets reshuffled. This mirrors
   // standard deckbuilder behavior and prevents cards from being lost between floors.
+  purgeTemporaryCards(r);
   const fullPool = [...r.draw, ...r.hand, ...r.discard, ...r.exhausted];
   r.draw = shuffle(fullPool);
   r.hand = [];
@@ -1380,18 +1570,18 @@ function playCard(handIdx){
   if(!c || c.cost > r.player.energy) return;
   r.player.energy -= c.cost;
 
-  resolveCardPlayCore(r, c);
+  resolveCardPlayCore(r, c, ()=>{
+    // Remove by ID rather than the original handIdx: cardOp effects resolved above
+    // (draw/discard/etc.) may have shifted hand indices.
+    const finalIdx = r.hand.indexOf(cardId);
+    if(finalIdx>=0) r.hand.splice(finalIdx,1);
+    if(c.exhaust){ r.exhausted.push(cardId); }
+    else{ r.discard.push(cardId); }
 
-  // Remove by ID rather than the original handIdx: cardOp effects resolved above
-  // (draw/discard/etc.) may have shifted hand indices.
-  const finalIdx = r.hand.indexOf(cardId);
-  if(finalIdx>=0) r.hand.splice(finalIdx,1);
-  if(c.exhaust){ r.exhausted.push(cardId); }
-  else{ r.discard.push(cardId); }
-
-  if(r.enemy.hp<=0){ onEnemyDefeated(); return; }
-  if(r.player.hp<=0){ onPlayerDefeated(); return; }
-  renderBattle();
+    if(r.enemy.hp<=0){ onEnemyDefeated(); return; }
+    if(r.player.hp<=0){ onPlayerDefeated(); return; }
+    renderBattle();
+  });
 }
 
 function endPlayerTurn(){
@@ -1448,6 +1638,7 @@ function goldForFloor(floorIndex, elite, boss){
 
 function onEnemyDefeated(){
   const r = S.run;
+  purgeTemporaryCards(r);
   const gained = goldForFloor(r.floor, r.enemy.elite, r.enemy.boss);
   r.player.gold += gained;
   r.lastGoldGained = gained;
@@ -1492,8 +1683,48 @@ function intentLabel(e){
   return {cls:'buf', text:`✨ 強化予告：+${move.strength}`};
 }
 
+function renderCardChoiceOverlay(r){
+  const pc = r.pendingChoice;
+  const selected = pc.selectedIdx;
+  app().innerHTML = `
+  <div class="screen center-screen">
+    <p class="eyebrow">CHOICE</p>
+    <h2>カードを選択（${selected.length} / ${pc.need}）</h2>
+    <div class="reward-row" id="choice-row">
+      ${pc.candidates.map((e,i)=>{
+        const c = cardById(e.rawId);
+        if(!c) return '';
+        const picked = selected.includes(i);
+        return `<div data-idx="${i}" style="text-align:center; cursor:pointer; ${picked?'outline:3px solid var(--gold); border-radius:10px;':''}">
+          ${renderCardHTML(c,{})}
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="margin-top:18px;">
+      <button class="primary" id="btn-choice-confirm" ${selected.length!==pc.need?'disabled':''}>決定</button>
+    </div>
+  </div>`;
+  qsa('#choice-row > div').forEach(wrap=>{
+    wrap.onclick = ()=>{
+      const i = parseInt(wrap.dataset.idx,10);
+      const pos = selected.indexOf(i);
+      if(pos>=0) selected.splice(pos,1);
+      else if(selected.length < pc.need) selected.push(i);
+      renderCardChoiceOverlay(r);
+    };
+  });
+  qs('#btn-choice-confirm').onclick = ()=>{
+    if(selected.length!==pc.need) return;
+    const chosen = selected.map(i=>pc.candidates[i]);
+    r.pendingChoice = null;
+    pc.onConfirm(chosen);
+  };
+}
+
 function renderBattle(){
-  const r = S.run; const p = r.player; const e = r.enemy;
+  const r = S.run;
+  if(r.pendingChoice){ renderCardChoiceOverlay(r); return; }
+  const p = r.player; const e = r.enemy;
   const intent = intentLabel(e);
   app().innerHTML = `
   <div class="screen">
@@ -1648,7 +1879,7 @@ const EVENT_TEMPLATES = [
   {title:'旅の行商人', desc:'フードを被った商人が道の端に座り、珍しい品を並べている。', choices:[
     {label:'掘り出し物を買う（40ゴールド消費・アンコモン以上のカードを1枚入手）', cost:40, apply:(r)=>{
       r.player.gold -= 40;
-      const pool = S.cards.filter(c=>c.rarity==='uncommon'||c.rarity==='rare');
+      const pool = S.cards.filter(c=>(c.rarity==='uncommon'||c.rarity==='rare') && !c.generatedOnly);
       const pick = pool[Math.floor(Math.random()*pool.length)];
       if(pick) r.discard.push(pick.id);
       return pick? `${pick.name}を手に入れた。` : '今日はめぼしい品がなかったようだ。';
@@ -1668,7 +1899,7 @@ const EVENT_TEMPLATES = [
         r[inst.pile].splice(inst.i,1);
         lostName = cardById(inst.cid).name;
       }
-      const pool = S.cards.filter(c=>c.rarity==='uncommon'||c.rarity==='rare');
+      const pool = S.cards.filter(c=>(c.rarity==='uncommon'||c.rarity==='rare') && !c.generatedOnly);
       const gained = pool[Math.floor(Math.random()*pool.length)];
       if(gained) r.discard.push(gained.id);
       return lostName? `${lostName}が消え、代わりに${gained?gained.name:'何か'}を授かった。` : `${gained?gained.name:'何か'}を授かった。`;
