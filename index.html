@@ -978,6 +978,7 @@ function applyCardEffects(r, c, done){
 function resolveCardPlayCore(r, c, done){
   r.cardsPlayedThisTurn = (r.cardsPlayedThisTurn||0) + 1;
   if(c.tags && c.tags.length){ r.tagsPlayedThisTurn = (r.tagsPlayedThisTurn||[]).concat(c.tags); }
+  fireRelicTiming(r, 'onTagCardUsed', c);
 
   // Existing triggers (registered by earlier cards this combat/turn) react to this play,
   // before this card's own trigger (if any) is registered below.
@@ -1727,6 +1728,7 @@ function goldForFloor(floorIndex, elite, boss){
 function onEnemyDefeated(){
   const r = S.run;
   purgeTemporaryCards(r);
+  fireRelicTiming(r, 'combatEnd');
   const gained = goldForFloor(r.floor, r.enemy.elite, r.enemy.boss);
   r.player.gold += gained;
   r.lastGoldGained = gained;
