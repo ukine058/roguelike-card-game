@@ -308,10 +308,14 @@ function loadSettings(){
 function saveSettings(s){
   try{ localStorage.setItem('settings', JSON.stringify(s)); }catch(e){ console.error(e); }
 }
+function migrateRelic(rel){
+  if(rel && !rel.timing) rel.timing = 'onPickup';
+  return rel;
+}
 function loadRelics(){
   try{
     const value = localStorage.getItem('relics');
-    if(value) return JSON.parse(value);
+    if(value) return JSON.parse(value).map(migrateRelic);
   }catch(e){ console.error(e); }
   return DEFAULT_RELICS;
 }
@@ -637,6 +641,8 @@ const EFFECT_FIELD_DEFS = [
   {key:'energy', label:'エネルギー付与', max:9, desc:(v)=>`エネルギー+${v}`},
   {key:'strength', label:'強化+（この戦闘中のみ）', max:20, desc:(v)=>`強化+${v}（この戦闘中のみ）`},
   {key:'permStrength', label:'強化+（永続）', max:20, desc:(v)=>`強化+${v}（永続）`},
+  {key:'dexterity', label:'器用+（この戦闘中のみ、ブロック獲得量に加算）', max:20, desc:(v)=>`器用+${v}（この戦闘中のみ）`},
+  {key:'permDexterity', label:'器用+（永続、ブロック獲得量に加算）', max:20, desc:(v)=>`器用+${v}（永続）`},
   {key:'metallicize', label:'自動ブロック+（この戦闘中のみ）', max:20, desc:(v)=>`毎ターン自動ブロック+${v}（この戦闘中のみ）`},
   {key:'permMetallicize', label:'自動ブロック+（永続）', max:20, desc:(v)=>`毎ターン自動ブロック+${v}（永続）`},
   {key:'thorns', label:'棘+（この戦闘中のみ、被弾時に反射）', max:20, desc:(v)=>`棘+${v}（この戦闘中のみ）`},
@@ -644,7 +650,13 @@ const EFFECT_FIELD_DEFS = [
   {key:'weak', label:'敵に弱体付与（ターン数）', max:99, desc:(v)=>`敵に弱体${v}`},
   {key:'vulnerable', label:'敵に脆弱付与（ターン数）', max:99, desc:(v)=>`敵に脆弱${v}`},
   {key:'poison', label:'敵に毒付与（ターン数）', max:99, desc:(v)=>`敵に毒${v}`},
+  {key:'stun', label:'敵の行動を封じる（麻痺、ターン数）', max:9, desc:(v)=>`敵の行動を${v}ターン封じる`},
+  {key:'reduceEnemyStrength', label:'敵の強化を減少させる（この戦闘中、直接減算）', max:20, desc:(v)=>`敵の強化を${v}減少`},
+  {key:'selfWeak', label:'自分に弱体付与（ターン数、代償効果向け）', max:99, desc:(v)=>`自分に弱体${v}`},
+  {key:'selfVulnerable', label:'自分に脆弱付与（ターン数、代償効果向け）', max:99, desc:(v)=>`自分に脆弱${v}`},
+  {key:'selfPoison', label:'自分に毒付与（ターン数、代償効果向け）', max:99, desc:(v)=>`自分に毒${v}`},
   {key:'heal', label:'自分のHP回復', max:99, desc:(v)=>`HPを${v}回復`},
+  {key:'regen', label:'再生付与（自分、毎ターン開始時に回復、ターン数）', max:99, desc:(v)=>`自分に再生${v}`},
   {key:'loseHp', label:'自分へのダメージ（代償）', max:99, desc:(v)=>`自分に${v}ダメージ`},
   {key:'hits', label:'発動回数（カード効果をこの回数分繰り返す）', max:10, min:1, default:1, showIf:(v)=>v>1, desc:(v)=>`${v}回発動`},
 ];
@@ -880,46 +892,74 @@ function resolveCardOp(r, op, done){
 // trigger firing later, and by cardOp's "play"/"generatePlay" (free auto-play) types.
 // Continuation-passing: calls done() once every repetition (and any card-op inside it,
 // including ones that pause for a player choice) has fully resolved.
+// Applies every "numeric effect" field (damage/block/draw/buffs/debuffs/heal/etc.) a
+// single time. Shared by applyCardEffects's repeat loop (cards/triggers) and by the
+// relic timed-effect resolver, which doesn't want a repeat loop or the "already dead"
+// early-exit that combat-end relics would otherwise trip on.
+function applyEffectValues(r, c){
+  const dmgVal = Math.max(0, (c.damage||0) + scaleBonus(c,'damage'));
+  if(dmgVal>0){
+    const dealt = applyDamageToEnemy(dmgVal + r.player.strength + r.player.permStrength, c.pierce);
+    pushLog(`${c.name}: 敵に${dealt}ダメージ${c.pierce?'（貫通）':''}。`);
+    if(c.lifesteal && dealt>0){ r.player.hp = Math.min(r.player.maxHp, r.player.hp + dealt); }
+  }
+  const blockVal = Math.max(0, (c.block||0) + scaleBonus(c,'block'));
+  if(blockVal>0){
+    const total = blockVal + r.player.dexterity + r.player.permDexterity;
+    r.player.block += total;
+    pushLog(`${c.name}: ブロック+${total}。`);
+  }
+  const drawVal = Math.max(0, (c.draw||0) + scaleBonus(c,'draw'));
+  if(drawVal>0){ drawCards(drawVal); pushLog(`${c.name}: カードを${drawVal}枚引いた。`); }
+  const energyVal = (c.energy||0) + scaleBonus(c,'energy');
+  if(energyVal){ r.player.energy += energyVal; }
+  const strengthVal = Math.max(0, (c.strength||0) + scaleBonus(c,'strength'));
+  if(strengthVal>0){ r.player.strength += strengthVal; pushLog(`${c.name}: 強化+${strengthVal}（この戦闘中）。`); }
+  const permStrengthVal = Math.max(0, (c.permStrength||0) + scaleBonus(c,'permStrength'));
+  if(permStrengthVal>0){ r.player.permStrength += permStrengthVal; pushLog(`${c.name}: 強化+${permStrengthVal}（永続）。`); }
+  const dexterityVal = Math.max(0, (c.dexterity||0) + scaleBonus(c,'dexterity'));
+  if(dexterityVal>0){ r.player.dexterity += dexterityVal; pushLog(`${c.name}: 器用+${dexterityVal}（この戦闘中）。`); }
+  const permDexterityVal = Math.max(0, (c.permDexterity||0) + scaleBonus(c,'permDexterity'));
+  if(permDexterityVal>0){ r.player.permDexterity += permDexterityVal; pushLog(`${c.name}: 器用+${permDexterityVal}（永続）。`); }
+  const metallicizeVal = Math.max(0, (c.metallicize||0) + scaleBonus(c,'metallicize'));
+  if(metallicizeVal>0){ r.player.metallicize += metallicizeVal; }
+  const permMetallicizeVal = Math.max(0, (c.permMetallicize||0) + scaleBonus(c,'permMetallicize'));
+  if(permMetallicizeVal>0){ r.player.permMetallicize += permMetallicizeVal; }
+  const thornsVal = Math.max(0, (c.thorns||0) + scaleBonus(c,'thorns'));
+  if(thornsVal>0){ r.player.thorns += thornsVal; }
+  const permThornsVal = Math.max(0, (c.permThorns||0) + scaleBonus(c,'permThorns'));
+  if(permThornsVal>0){ r.player.permThorns += permThornsVal; }
+  const weakVal = Math.max(0, (c.weak||0) + scaleBonus(c,'weak'));
+  if(weakVal>0){ r.enemy.weak += weakVal; }
+  const vulnVal = Math.max(0, (c.vulnerable||0) + scaleBonus(c,'vulnerable'));
+  if(vulnVal>0){ r.enemy.vulnerable += vulnVal; }
+  const poisonVal = Math.max(0, (c.poison||0) + scaleBonus(c,'poison'));
+  if(poisonVal>0){ r.enemy.poison += poisonVal; }
+  const stunVal = Math.max(0, (c.stun||0) + scaleBonus(c,'stun'));
+  if(stunVal>0){ r.enemy.stun = (r.enemy.stun||0) + stunVal; pushLog(`${c.name}: 敵を${stunVal}ターン麻痺させた。`); }
+  const reduceStrVal = Math.max(0, (c.reduceEnemyStrength||0) + scaleBonus(c,'reduceEnemyStrength'));
+  if(reduceStrVal>0){ r.enemy.strength = Math.max(0, r.enemy.strength - reduceStrVal); pushLog(`${c.name}: 敵の強化を${reduceStrVal}減少させた。`); }
+  const selfWeakVal = Math.max(0, (c.selfWeak||0) + scaleBonus(c,'selfWeak'));
+  if(selfWeakVal>0){ r.player.weak += selfWeakVal; }
+  const selfVulnVal = Math.max(0, (c.selfVulnerable||0) + scaleBonus(c,'selfVulnerable'));
+  if(selfVulnVal>0){ r.player.vulnerable += selfVulnVal; }
+  const selfPoisonVal = Math.max(0, (c.selfPoison||0) + scaleBonus(c,'selfPoison'));
+  if(selfPoisonVal>0){ r.player.poison += selfPoisonVal; }
+  const healVal = Math.max(0, (c.heal||0) + scaleBonus(c,'heal'));
+  if(healVal>0){ r.player.hp = Math.min(r.player.maxHp, r.player.hp + healVal); }
+  const regenVal = Math.max(0, (c.regen||0) + scaleBonus(c,'regen'));
+  if(regenVal>0){ r.player.regen = (r.player.regen||0) + regenVal; }
+  const loseHpVal = Math.max(0, (c.loseHp||0) + scaleBonus(c,'loseHp'));
+  if(loseHpVal>0){ r.player.hp = Math.max(0, r.player.hp - loseHpVal); }
+}
+
 function applyCardEffects(r, c, done){
   const replays = Math.max(1, (c.hits||1) + scaleBonus(c,'hits'));
   let rep = 0;
   (function step(){
     if(rep>=replays || r.enemy.hp<=0 || r.player.hp<=0){ done(); return; }
     rep++;
-    const dmgVal = Math.max(0, (c.damage||0) + scaleBonus(c,'damage'));
-    if(dmgVal>0){
-      const dealt = applyDamageToEnemy(dmgVal + r.player.strength + r.player.permStrength, c.pierce);
-      pushLog(`${c.name}: 敵に${dealt}ダメージ${c.pierce?'（貫通）':''}。`);
-      if(c.lifesteal && dealt>0){ r.player.hp = Math.min(r.player.maxHp, r.player.hp + dealt); }
-    }
-    const blockVal = Math.max(0, (c.block||0) + scaleBonus(c,'block'));
-    if(blockVal>0){ r.player.block += blockVal; pushLog(`${c.name}: ブロック+${blockVal}。`); }
-    const drawVal = Math.max(0, (c.draw||0) + scaleBonus(c,'draw'));
-    if(drawVal>0){ drawCards(drawVal); pushLog(`${c.name}: カードを${drawVal}枚引いた。`); }
-    const energyVal = (c.energy||0) + scaleBonus(c,'energy');
-    if(energyVal){ r.player.energy += energyVal; }
-    const strengthVal = Math.max(0, (c.strength||0) + scaleBonus(c,'strength'));
-    if(strengthVal>0){ r.player.strength += strengthVal; pushLog(`${c.name}: 強化+${strengthVal}（この戦闘中）。`); }
-    const permStrengthVal = Math.max(0, (c.permStrength||0) + scaleBonus(c,'permStrength'));
-    if(permStrengthVal>0){ r.player.permStrength += permStrengthVal; pushLog(`${c.name}: 強化+${permStrengthVal}（永続）。`); }
-    const metallicizeVal = Math.max(0, (c.metallicize||0) + scaleBonus(c,'metallicize'));
-    if(metallicizeVal>0){ r.player.metallicize += metallicizeVal; }
-    const permMetallicizeVal = Math.max(0, (c.permMetallicize||0) + scaleBonus(c,'permMetallicize'));
-    if(permMetallicizeVal>0){ r.player.permMetallicize += permMetallicizeVal; }
-    const thornsVal = Math.max(0, (c.thorns||0) + scaleBonus(c,'thorns'));
-    if(thornsVal>0){ r.player.thorns += thornsVal; }
-    const permThornsVal = Math.max(0, (c.permThorns||0) + scaleBonus(c,'permThorns'));
-    if(permThornsVal>0){ r.player.permThorns += permThornsVal; }
-    const weakVal = Math.max(0, (c.weak||0) + scaleBonus(c,'weak'));
-    if(weakVal>0){ r.enemy.weak += weakVal; }
-    const vulnVal = Math.max(0, (c.vulnerable||0) + scaleBonus(c,'vulnerable'));
-    if(vulnVal>0){ r.enemy.vulnerable += vulnVal; }
-    const poisonVal = Math.max(0, (c.poison||0) + scaleBonus(c,'poison'));
-    if(poisonVal>0){ r.enemy.poison += poisonVal; }
-    const healVal = Math.max(0, (c.heal||0) + scaleBonus(c,'heal'));
-    if(healVal>0){ r.player.hp = Math.min(r.player.maxHp, r.player.hp + healVal); }
-    const loseHpVal = Math.max(0, (c.loseHp||0) + scaleBonus(c,'loseHp'));
-    if(loseHpVal>0){ r.player.hp = Math.max(0, r.player.hp - loseHpVal); }
+    applyEffectValues(r, c);
 
     if(c.cardOp && c.cardOp.enabled){
       resolveCardOp(r, c.cardOp, ()=>{
@@ -1081,13 +1121,22 @@ function renderRelicEditor(){
   });
   qsa('.add-card-tile').forEach(tile=>{
     tile.onclick = ()=>{
-      openRelicModal({ id:newId(), name:'新しいレリック', rarity: tile.dataset.rarity, effect:{} }, true);
+      openRelicModal({ id:newId(), name:'新しいレリック', rarity: tile.dataset.rarity, timing:'onPickup', triggerTag:'', effect:{} }, true);
     };
   });
 }
 
+function relicEffectFieldsHTML(timing, effect){
+  return relicFieldDefsFor(timing).map(def=>`
+    <div class="field">
+      <label>${def.label}</label>
+      <input type="number" id="rm-eff-${def.key}" value="${effect[def.key]||0}" min="0" max="${def.max||99}">
+    </div>`).join('');
+}
+
 function openRelicModal(relic, isNew){
   const rel = {...relic, effect:{...(relic.effect||{})}};
+  const timing = rel.timing || 'onPickup';
   const overlay = el(`<div class="modal-overlay">
     <div class="modal-box">
       <h3>${isNew? 'レリックを新規作成' : 'レリックを編集'}</h3>
@@ -1099,12 +1148,16 @@ function openRelicModal(relic, isNew){
           <option value="rare" ${rel.rarity==='rare'?'selected':''}>レア</option>
         </select>
       </div>
-      <div class="section-label">効果（入手時に一度だけ適用、または毎ターン継続）</div>
-      ${RELIC_EFFECT_DEFS.map(def=>`
-      <div class="field">
-        <label>${def.label}</label>
-        <input type="number" id="rm-${def.key}" value="${rel.effect[def.key]||0}" min="0" max="99">
-      </div>`).join('')}
+      <div class="field"><label>発動タイミング</label>
+        <select id="rm-timing">
+          ${RELIC_TIMINGS.map(t=>`<option value="${t.key}" ${timing===t.key?'selected':''}>${t.label}</option>`).join('')}
+        </select>
+      </div>
+      <div id="rm-tag-field" style="${timing==='onTagCardUsed'?'':'display:none;'}">
+        <div class="field"><label>発動条件（このタグのカードを使うたび。空欄でどのカードでも）</label><input type="text" id="rm-triggertag" value="${rel.triggerTag||''}"></div>
+      </div>
+      <div class="section-label" id="rm-effect-label">${timing==='onPickup' ? '効果（入手時に一度だけ適用）' : '効果（このタイミングになるたび発動）'}</div>
+      <div id="rm-effect-fields">${relicEffectFieldsHTML(timing, rel.effect)}</div>
       <div class="modal-actions">
         <button class="ghost" id="rm-cancel">キャンセル</button>
         <button class="primary" id="rm-save">保存する</button>
@@ -1113,15 +1166,25 @@ function openRelicModal(relic, isNew){
   </div>`);
   document.body.appendChild(overlay);
   qs('#rm-cancel',overlay).onclick = ()=> overlay.remove();
+  qs('#rm-timing',overlay).onchange = ()=>{
+    const t = qs('#rm-timing',overlay).value;
+    qs('#rm-tag-field',overlay).style.display = t==='onTagCardUsed' ? 'block' : 'none';
+    qs('#rm-effect-label',overlay).textContent = t==='onPickup' ? '効果（入手時に一度だけ適用）' : '効果（このタイミングになるたび発動）';
+    qs('#rm-effect-fields',overlay).innerHTML = relicEffectFieldsHTML(t, rel.effect);
+  };
   qs('#rm-save',overlay).onclick = ()=>{
+    const t = qs('#rm-timing',overlay).value;
     const updated = {
       id: rel.id,
       name: qs('#rm-name',overlay).value.trim() || '無名のレリック',
       rarity: qs('#rm-rarity',overlay).value,
+      timing: t,
+      triggerTag: (qs('#rm-triggertag',overlay).value||'').trim(),
       effect: {},
     };
-    RELIC_EFFECT_DEFS.forEach(def=>{
-      updated.effect[def.key] = clampInt(qs(`#rm-${def.key}`,overlay).value,0,99,0);
+    relicFieldDefsFor(t).forEach(def=>{
+      const input = qs(`#rm-eff-${def.key}`,overlay);
+      if(input) updated.effect[def.key] = clampInt(input.value,0,def.max||99,0);
     });
     if(isNew){ S.relics.push(updated); }
     else{ S.relics = S.relics.map(x=> x.id===updated.id? updated : x); }
@@ -1417,7 +1480,7 @@ function makeEnemy(floorIndex){
   const hp = Math.round(t.baseHp * scale);
   return {
     name: t.name, emoji: t.emoji, elite: t.elite||false, boss: t.boss||false,
-    hp, maxHp: hp, block:0, strength:0, weak:0, vulnerable:0, poison:0,
+    hp, maxHp: hp, block:0, strength:0, weak:0, vulnerable:0, poison:0, stun:0,
     moves: t.moves, moveIdx: 0,
   };
 }
@@ -1434,6 +1497,7 @@ function startRun(){
       hp: S.settings.startingHp, maxHp: S.settings.startingHp,
       energy: S.settings.energyPerTurn, block:0, strength:0, weak:0, vulnerable:0, poison:0, metallicize:0,
       permStrength:0, permMetallicize:0, thorns:0, permThorns:0, gold:0,
+      dexterity:0, permDexterity:0, regen:0,
       extraEnergy:0, extraDraw:0, relics:[],
     },
     floor: 1,
@@ -1489,11 +1553,17 @@ function beginFloor(){
   r.discard = [];
   r.exhausted = [];
 
-  // Temporary strength/metallicize/thorns are combat-only and reset here; the permanent
-  // versions (permStrength/permMetallicize/permThorns) are untouched and carry across the run.
+  // Temporary strength/dexterity/metallicize/thorns and any lingering statuses are
+  // combat-only and reset here; the permanent versions (permStrength/permDexterity/
+  // permMetallicize/permThorns) are untouched and carry across the run.
   r.player.strength = 0;
+  r.player.dexterity = 0;
   r.player.metallicize = 0;
   r.player.thorns = 0;
+  r.player.weak = 0;
+  r.player.vulnerable = 0;
+  r.player.poison = 0;
+  r.player.regen = 0;
   r.activeTriggers = [];
 
   r.enemy = makeEnemy(r.floor);
@@ -1501,6 +1571,7 @@ function beginFloor(){
   r.log = [];
   pushLog(`${r.enemy.name}が現れた！`);
   startPlayerTurn(true);
+  fireRelicTiming(r, 'combatStart');
   S.screen='battle';
   renderBattle();
 }
@@ -1520,6 +1591,17 @@ function drawCards(n){
 
 function startPlayerTurn(first){
   const r = S.run;
+  if(r.player.poison>0){
+    r.player.hp = Math.max(0, r.player.hp - r.player.poison);
+    pushLog(`毒によって${r.player.poison}ダメージを受けた。`);
+    r.player.poison--;
+    if(r.player.hp<=0){ onPlayerDefeated(); return; }
+  }
+  if(r.player.regen>0){
+    r.player.hp = Math.min(r.player.maxHp, r.player.hp + r.player.regen);
+    pushLog(`再生によってHPを${r.player.regen}回復した。`);
+    r.player.regen--;
+  }
   r.player.block = 0;
   const autoBlock = r.player.metallicize + r.player.permMetallicize;
   if(autoBlock>0){ r.player.block += autoBlock; }
@@ -1539,6 +1621,7 @@ function startPlayerTurn(first){
   r.tagsPlayedThisTurn = [];
   if(r.activeTriggers) r.activeTriggers = r.activeTriggers.filter(t=>t.duration!=='turn');
   drawCards(S.settings.handSize + (r.player.extraDraw||0));
+  fireRelicTiming(r, 'turnStart');
   r.turnPhase='player';
 }
 
@@ -1604,26 +1687,31 @@ function runEnemyTurn(){
     e.poison--;
     if(e.hp<=0){ onEnemyDefeated(); return; }
   }
-  const move = e.moves[e.moveIdx % e.moves.length];
-  if(move.type==='attack'){
-    const dealt = applyDamageToPlayer(move.damage + e.strength);
-    pushLog(`${e.name}の攻撃！ ${dealt}ダメージ。`);
-    const thornsTotal = r.player.thorns + r.player.permThorns;
-    if(thornsTotal>0){
-      e.hp = Math.max(0, e.hp - thornsTotal);
-      pushLog(`棘によって${e.name}に${thornsTotal}ダメージ。`);
-      if(e.hp<=0){ onEnemyDefeated(); return; }
+  if(e.stun>0){
+    e.stun--;
+    pushLog(`${e.name}は麻痺していて行動できない。`);
+  } else {
+    const move = e.moves[e.moveIdx % e.moves.length];
+    if(move.type==='attack'){
+      const dealt = applyDamageToPlayer(move.damage + e.strength);
+      pushLog(`${e.name}の攻撃！ ${dealt}ダメージ。`);
+      const thornsTotal = r.player.thorns + r.player.permThorns;
+      if(thornsTotal>0){
+        e.hp = Math.max(0, e.hp - thornsTotal);
+        pushLog(`棘によって${e.name}に${thornsTotal}ダメージ。`);
+        if(e.hp<=0){ onEnemyDefeated(); return; }
+      }
+    } else if(move.type==='defend'){
+      e.block += move.block;
+      pushLog(`${e.name}は防御態勢。ブロック+${move.block}。`);
+    } else if(move.type==='buff'){
+      e.strength += move.strength;
+      pushLog(`${e.name}は力を高めた！ 強化+${move.strength}。`);
     }
-  } else if(move.type==='defend'){
-    e.block += move.block;
-    pushLog(`${e.name}は防御態勢。ブロック+${move.block}。`);
-  } else if(move.type==='buff'){
-    e.strength += move.strength;
-    pushLog(`${e.name}は力を高めた！ 強化+${move.strength}。`);
+    e.moveIdx++;
   }
   if(e.weak>0) e.weak--;
   if(e.vulnerable>0) e.vulnerable--;
-  e.moveIdx++;
   if(r.player.hp<=0){ onPlayerDefeated(); return; }
   startPlayerTurn(false);
   renderBattle();
@@ -1669,9 +1757,12 @@ function onPlayerDefeated(){
 function statusChips(entity){
   const chips = [];
   if(entity.strength) chips.push(`💪 強化 ${entity.strength}`);
+  if(entity.dexterity) chips.push(`🤸 器用 ${entity.dexterity}`);
   if(entity.weak) chips.push(`😮‍💨 弱体 ${entity.weak}`);
   if(entity.vulnerable) chips.push(`🎯 脆弱 ${entity.vulnerable}`);
   if(entity.poison) chips.push(`☠️ 毒 ${entity.poison}`);
+  if(entity.regen) chips.push(`✨ 再生 ${entity.regen}`);
+  if(entity.stun) chips.push(`💫 麻痺 ${entity.stun}`);
   if(entity.metallicize) chips.push(`🛡️ 自動 ${entity.metallicize}`);
   if(entity.thorns) chips.push(`🌵 棘 ${entity.thorns}`);
   return chips.map(c=>`<span class="status-chip">${c}</span>`).join('');
@@ -1735,7 +1826,7 @@ function renderBattle(){
         <div class="portrait">🗡️</div>
         <div class="cname">冒険者</div>
         <div class="hpbar-wrap"><div class="hpbar-fill" style="width:${Math.max(0,100*p.hp/p.maxHp)}%"></div><div class="hpbar-text">${p.hp} / ${p.maxHp}${p.block?` (🛡${p.block})`:''}</div></div>
-        <div class="statuses">${statusChips({...p, strength: p.strength+p.permStrength, metallicize: p.metallicize+p.permMetallicize, thorns: p.thorns+p.permThorns})}</div>
+        <div class="statuses">${statusChips({...p, strength: p.strength+p.permStrength, dexterity: p.dexterity+p.permDexterity, metallicize: p.metallicize+p.permMetallicize, thorns: p.thorns+p.permThorns})}</div>
       </div>
       <div class="vsmark">VS</div>
       <div class="combatant enemy">
@@ -1813,45 +1904,97 @@ function ownedCardInstances(r){
 
 /* ============================= RELICS ============================= */
 
-const RELIC_EFFECT_DEFS = [
-  {key:'permStrength', label:'強化+（永続）', desc:(v)=>`強化+${v}（永続）`},
-  {key:'permMetallicize', label:'自動ブロック+（永続）', desc:(v)=>`自動ブロック+${v}（永続）`},
-  {key:'permThorns', label:'棘+（永続）', desc:(v)=>`棘+${v}（永続）`},
-  {key:'maxHpBonus', label:'最大HP+（入手時、即時回復も含む）', desc:(v)=>`最大HP+${v}`},
-  {key:'goldBonus', label:'ゴールド+（入手時）', desc:(v)=>`ゴールド+${v}`},
-  {key:'extraEnergy', label:'毎ターンのエネルギー+', desc:(v)=>`毎ターンのエネルギー+${v}`},
-  {key:'extraDraw', label:'毎ターンのドロー+', desc:(v)=>`毎ターンのドロー+${v}`},
+const RELIC_TIMINGS = [
+  {key:'onPickup', label:'即時（入手時。カードと自分への効果のみ・1回だけ）'},
+  {key:'combatStart', label:'戦闘開始時'},
+  {key:'turnStart', label:'ターン開始時'},
+  {key:'combatEnd', label:'戦闘終了時'},
+  {key:'onTagCardUsed', label:'指定タグのカード使用時'},
 ];
+// Meta fields that aren't part of a card's own effect vocabulary — they only make
+// sense as a one-time acquisition bonus (onPickup), except goldBonus which also
+// works as a recurring "gain gold on victory" combat-end effect.
+const RELIC_META_FIELDS = [
+  {key:'maxHpBonus', label:'最大HP+（永続、即時回復も含む）', max:99, desc:(v)=>`最大HP+${v}`},
+  {key:'goldBonus', label:'ゴールド+', max:999, desc:(v)=>`ゴールド+${v}`},
+  {key:'extraEnergy', label:'毎ターンのエネルギー+（永続）', max:9, desc:(v)=>`毎ターンのエネルギー+${v}`},
+  {key:'extraDraw', label:'毎ターンのドロー+（永続）', max:9, desc:(v)=>`毎ターンのドロー+${v}`},
+];
+// Which effect fields make sense for a given relic timing. onPickup fires once, outside
+// any particular combat, and only ever affects the player themself or their deck — never
+// the enemy — so every enemy-targeting / combat-only field is excluded there. The
+// recurring timings (every combat start/turn start/tag-use, and combat end) share the
+// full card effect vocabulary instead, minus the "permanent" stat fields (since firing
+// those every single combat or every single turn would spiral out of control).
+function relicFieldDefsFor(timing){
+  if(timing==='onPickup'){
+    const allowed = ['permStrength','permDexterity','permMetallicize','permThorns','heal'];
+    return [...EFFECT_FIELD_DEFS.filter(d=>allowed.includes(d.key)), ...RELIC_META_FIELDS];
+  }
+  const excluded = ['permStrength','permDexterity','permMetallicize','permThorns'];
+  const defs = EFFECT_FIELD_DEFS.filter(d=>!excluded.includes(d.key));
+  return timing==='combatEnd' ? [...defs, RELIC_META_FIELDS.find(d=>d.key==='goldBonus')] : defs;
+}
 
 function relicDescription(relic){
+  const timing = relic.timing || 'onPickup';
   const e = relic.effect || {};
+  const defs = relicFieldDefsFor(timing);
   const parts = [];
-  RELIC_EFFECT_DEFS.forEach(def=>{
+  defs.forEach(def=>{
     const v = e[def.key]||0;
     if(v>0) parts.push(def.desc(v));
   });
-  return parts.length ? parts.join('。')+'。' : '効果なし';
+  const timingLabel = (RELIC_TIMINGS.find(t=>t.key===timing)||{}).label || timing;
+  const body = parts.length ? parts.join('。')+'。' : '効果なし';
+  if(timing==='onPickup') return body;
+  const tagPart = timing==='onTagCardUsed' ? (relic.triggerTag ? `[${relic.triggerTag}]の` : 'どの') : '';
+  return `【${timingLabel}】${tagPart}${body}`;
 }
 
 const DEFAULT_RELICS = [
-  {id:'bloodstained_charm', name:'血染めの護符', rarity:'common', effect:{permStrength:1}},
-  {id:'iron_heart', name:'鉄の心臓', rarity:'common', effect:{permMetallicize:1}},
-  {id:'thorn_bracelet', name:'棘の腕輪', rarity:'uncommon', effect:{permThorns:2}},
-  {id:'giant_heart', name:'巨人の心臓', rarity:'uncommon', effect:{maxHpBonus:15}},
-  {id:'sage_scroll', name:'賢者の巻物', rarity:'rare', effect:{extraDraw:1}},
-  {id:'sun_coin', name:'太陽のコイン', rarity:'rare', effect:{extraEnergy:1}},
+  {id:'bloodstained_charm', name:'血染めの護符', rarity:'common', timing:'onPickup', effect:{permStrength:1}},
+  {id:'iron_heart', name:'鉄の心臓', rarity:'common', timing:'onPickup', effect:{permMetallicize:1}},
+  {id:'thorn_bracelet', name:'棘の腕輪', rarity:'uncommon', timing:'onPickup', effect:{permThorns:2}},
+  {id:'giant_heart', name:'巨人の心臓', rarity:'uncommon', timing:'onPickup', effect:{maxHpBonus:15}},
+  {id:'sage_scroll', name:'賢者の巻物', rarity:'rare', timing:'onPickup', effect:{extraDraw:1}},
+  {id:'sun_coin', name:'太陽のコイン', rarity:'rare', timing:'onPickup', effect:{extraEnergy:1}},
+  {id:'battle_sigil', name:'戦の紋章', rarity:'common', timing:'combatStart', effect:{strength:1}},
+  {id:'watchful_bell', name:'見張りの鐘', rarity:'uncommon', timing:'turnStart', effect:{block:3}},
+  {id:'echoing_medal', name:'残響のメダル', rarity:'uncommon', timing:'combatEnd', effect:{goldBonus:10}},
+  {id:'attuned_lens', name:'共鳴のレンズ', rarity:'rare', timing:'onTagCardUsed', triggerTag:'', effect:{block:1}},
 ];
 
+// Applies a relic's own timed effect once. Shares EFFECT_FIELD_DEFS with cards via
+// applyEffectValues, plus the relic-only meta fields (max HP/gold/energy/draw) which
+// only ever apply at onPickup (goldBonus also applies at combatEnd).
+function fireRelicTiming(r, timing, playedCard){
+  if(!r.player.relics || r.player.relics.length===0) return;
+  r.player.relics.forEach(relicId=>{
+    const relic = S.relics.find(x=>x.id===relicId);
+    if(!relic || (relic.timing||'onPickup')!==timing) return;
+    if(timing==='onTagCardUsed'){
+      const tagOk = !relic.triggerTag || (playedCard && playedCard.tags && playedCard.tags.includes(relic.triggerTag));
+      if(!tagOk) return;
+    }
+    const e = relic.effect || {};
+    if(timing==='combatEnd' && e.goldBonus){
+      r.player.gold += e.goldBonus;
+      pushLog(`${relic.name}: ゴールド+${e.goldBonus}。`);
+    }
+    applyEffectValues(r, {name: relic.name, ...e});
+  });
+}
+
 function applyRelicEffect(r, relic){
+  r.player.relics.push(relic.id);
+  if((relic.timing||'onPickup') !== 'onPickup') return; // recurring relics fire later, from fireRelicTiming
   const e = relic.effect || {};
-  if(e.permStrength) r.player.permStrength += e.permStrength;
-  if(e.permMetallicize) r.player.permMetallicize += e.permMetallicize;
-  if(e.permThorns) r.player.permThorns += e.permThorns;
   if(e.maxHpBonus){ r.player.maxHp += e.maxHpBonus; r.player.hp = Math.min(r.player.maxHp, r.player.hp + e.maxHpBonus); }
   if(e.goldBonus) r.player.gold += e.goldBonus;
   if(e.extraEnergy) r.player.extraEnergy = (r.player.extraEnergy||0) + e.extraEnergy;
   if(e.extraDraw) r.player.extraDraw = (r.player.extraDraw||0) + e.extraDraw;
-  r.player.relics.push(relic.id);
+  applyEffectValues(r, {name: relic.name, ...e});
 }
 
 function renderRelicReward(){
