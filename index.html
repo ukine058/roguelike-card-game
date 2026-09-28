@@ -260,6 +260,28 @@ const ENEMY_TEMPLATES = [
   {name:'灰燼の竜', emoji:'🐉', baseHp:140, elite:true, boss:true, moves:[{type:'attack',damage:20},{type:'buff',strength:3},{type:'attack',damage:14},{type:'attack',damage:14},{type:'defend',block:18}]},
 ];
 
+// On/off switches for the card-acquisition helpers.
+const SETTING_TOGGLES = [
+  {key:'rewardRerollEnabled', label:'カード報酬のリロールを有効にする', def:true},
+  {key:'tagFocusEnabled', label:'タグ指定リロール（狙い撃ち）を有効にする', def:true},
+  {key:'skipTokenEnabled', label:'報酬をスキップするとリロールトークンを獲得する', def:true},
+  {key:'shopRerollEnabled', label:'ショップの商品入れ替えを有効にする', def:true},
+];
+// Gold costs, adjustable for balance. Each is a whole number of gold.
+const SETTING_COSTS = [
+  {key:'rerollRewardBase', label:'報酬リロールの基本価格', def:30, max:999},
+  {key:'rerollRewardStep', label:'報酬リロールの1回ごとの値上がり', def:20, max:999},
+  {key:'rerollTagExtra', label:'タグ指定リロールの追加料金（ゴールド払い時）', def:30, max:999},
+  {key:'rerollShopBase', label:'ショップ入れ替えの基本価格', def:25, max:999},
+  {key:'rerollShopStep', label:'ショップ入れ替えの1回ごとの値上がり', def:15, max:999},
+  {key:'eventMerchantCost', label:'イベント「旅の行商人」の消費ゴールド', def:40, max:999},
+  {key:'shopPriceCommon', label:'ショップのカード価格（コモン）', def:50, max:999},
+  {key:'shopPriceUncommon', label:'ショップのカード価格（アンコモン）', def:85, max:999},
+  {key:'shopPriceRare', label:'ショップのカード価格（レア）', def:150, max:999},
+  {key:'shopRelicPrice', label:'ショップのレリック価格', def:200, max:9999},
+  {key:'shopRemoveCost', label:'ショップのカード除去料金', def:75, max:999},
+  {key:'shopUpgradeCost', label:'ショップのカード強化料金', def:100, max:999},
+];
 const DEFAULT_SETTINGS = {
   startingHp: 70,
   energyPerTurn: 3,
@@ -268,6 +290,8 @@ const DEFAULT_SETTINGS = {
   eliteEvery: 4,
   enemyHpScalePct: 12, // % increase per floor
   restHealPct: 30,
+  ...Object.fromEntries(SETTING_TOGGLES.map(t=>[t.key,t.def])),
+  ...Object.fromEntries(SETTING_COSTS.map(c=>[c.key,c.def])),
 };
 
 const RARITY_LABEL = {basic:'ベーシック', common:'コモン', uncommon:'アンコモン', rare:'レア'};
@@ -566,6 +590,11 @@ function renderSettings(){
       <div class="field"><label>休憩所での回復率(%)</label><input type="number" id="s-rest" value="${s.restHealPct}" min="0" max="100">
         <p class="hint">3階層に一度、休憩所として最大HPのこの割合を回復します。</p>
       </div>
+      <div class="section-label">カード獲得の補助（オン/オフ）</div>
+      ${SETTING_TOGGLES.map(t=>`<div class="checkbox-field"><input type="checkbox" id="s-${t.key}" ${s[t.key]?'checked':''}><label for="s-${t.key}">${t.label}</label></div>`).join('')}
+      <div class="section-label">ゴールド消費量の調整</div>
+      ${SETTING_COSTS.map(c=>`<div class="field"><label>${c.label}</label><input type="number" id="s-${c.key}" value="${s[c.key]}" min="0" max="${c.max}"></div>`).join('')}
+      <p class="hint">0にすると無料になります。リロールトークンは、ゴールドの代わりに消費されます。</p>
       <div class="modal-actions">
         <button id="btn-reset-settings">初期値に戻す</button>
         <button class="primary" id="btn-save-settings">保存する</button>
@@ -587,6 +616,8 @@ function renderSettings(){
       eliteEvery: clampInt(qs('#s-elite').value,1,20,4),
       enemyHpScalePct: clampInt(qs('#s-scale').value,0,200,12),
       restHealPct: clampInt(qs('#s-rest').value,0,100,30),
+      ...Object.fromEntries(SETTING_TOGGLES.map(t=>[t.key, qs('#s-'+t.key).checked])),
+      ...Object.fromEntries(SETTING_COSTS.map(c=>[c.key, clampInt(qs('#s-'+c.key).value,0,c.max,c.def)])),
     };
     saveSettings(S.settings);
     S.screen='home'; renderHome();
@@ -1495,14 +1526,21 @@ function buildStartingDeck(){
   return deck;
 }
 
-function weightedPickCard(excludeIds){
-  const pool = S.cards.filter(c=> c.rarity!=='basic' && !c.generatedOnly && !excludeIds.includes(c.id));
+// focusTag: cards carrying this tag get a much higher weight. onlyFocus: restrict the pool
+// to tagged cards entirely (when any exist), used to guarantee at least one targeted card.
+function weightedPickCard(excludeIds, focusTag, onlyFocus){
+  let pool = S.cards.filter(c=> c.rarity!=='basic' && !c.generatedOnly && !excludeIds.includes(c.id));
+  if(focusTag && onlyFocus){
+    const tagged = pool.filter(c=>c.tags && c.tags.includes(focusTag));
+    if(tagged.length) pool = tagged;
+  }
   if(pool.length===0) return null;
-  const total = pool.reduce((s,c)=> s + (RARITY_WEIGHT[c.rarity]||10), 0);
-  let r = Math.random()*total;
+  const weightOf = (c)=> (RARITY_WEIGHT[c.rarity]||10) * ((focusTag && c.tags && c.tags.includes(focusTag)) ? 8 : 1);
+  const total = pool.reduce((sum,c)=> sum + weightOf(c), 0);
+  let x = Math.random()*total;
   for(const c of pool){
-    r -= (RARITY_WEIGHT[c.rarity]||10);
-    if(r<=0) return c;
+    x -= weightOf(c);
+    if(x<=0) return c;
   }
   return pool[pool.length-1];
 }
@@ -1516,6 +1554,40 @@ function threeRewardCards(){
     picks.push(c); used.push(c.id);
   }
   return picks;
+}
+
+// Card-reward choices (ids). With a focus tag the first slot is guaranteed to be a
+// tagged card (if one exists) and the rest are weighted heavily toward it.
+function generateRewardChoices(r, focusTag){
+  const n = 3 + (r.player.extraRewardChoices||0);
+  const ids = [], used = [];
+  for(let i=0;i<n;i++){
+    const c = weightedPickCard(used, focusTag, !!focusTag && i===0);
+    if(!c) break;
+    ids.push(c.id); used.push(c.id);
+  }
+  return ids;
+}
+function generateShopOffers(){
+  const offers = [], used = [];
+  for(let i=0;i<3;i++){
+    const c = weightedPickCard(used);
+    if(!c) break;
+    used.push(c.id);
+    offers.push({cardId:c.id, price:shopPrice(c.rarity), sold:false});
+  }
+  return offers;
+}
+function rewardableTags(){
+  const set = new Set();
+  S.cards.forEach(c=>{ if(c.rarity!=='basic' && !c.generatedOnly && c.tags) c.tags.forEach(t=>set.add(t)); });
+  return [...set].sort();
+}
+// A reroll token is spent first; otherwise the gold price is paid. Returns false if unaffordable.
+function payReroll(r, goldCost){
+  if((r.player.rerollTokens||0)>0){ r.player.rerollTokens--; return true; }
+  if(r.player.gold>=goldCost){ r.player.gold -= goldCost; return true; }
+  return false;
 }
 
 function shuffle(arr){
@@ -1582,6 +1654,7 @@ function startRun(){
     temporaryCardIids:{},
     rewardChoices:null,
     rewardRerollCount:0,
+    rewardFocusTag:'',
     shopRerollCount:0,
   };
   S.run.draw = shuffle(S.run.deck);
@@ -1790,6 +1863,7 @@ function goldForFloor(floorIndex, elite, boss){
 
 function onEnemyDefeated(){
   const r = S.run;
+  r.rewardChoices = null; r.rewardRerollCount = 0; r.rewardFocusTag = '';
   purgeTemporaryCards(r);
   fireRelicTiming(r, 'combatEnd');
   const gained = goldForFloor(r.floor, r.enemy.elite, r.enemy.boss);
@@ -1984,6 +2058,8 @@ const RELIC_META_FIELDS = [
   {key:'goldBonus', label:'ゴールド+', max:999, desc:(v)=>`ゴールド+${v}`},
   {key:'extraEnergy', label:'毎ターンのエネルギー+（永続）', max:9, desc:(v)=>`毎ターンのエネルギー+${v}`},
   {key:'extraDraw', label:'毎ターンのドロー+（永続）', max:9, desc:(v)=>`毎ターンのドロー+${v}`},
+  {key:'extraRewardChoices', label:'カード報酬の選択肢+（永続）', max:5, desc:(v)=>`カード報酬の選択肢+${v}`},
+  {key:'rerollTokens', label:'リロールトークン+（入手時に獲得）', max:20, desc:(v)=>`リロールトークン+${v}`},
 ];
 // Which effect fields make sense for a given relic timing. onPickup fires once, outside
 // any particular combat, and only ever affects the player themself or their deck — never
@@ -2027,6 +2103,8 @@ const DEFAULT_RELICS = [
   {id:'battle_sigil', name:'戦の紋章', rarity:'common', timing:'combatStart', effect:{strength:1}},
   {id:'watchful_bell', name:'見張りの鐘', rarity:'uncommon', timing:'turnStart', effect:{block:3}},
   {id:'echoing_medal', name:'残響のメダル', rarity:'uncommon', timing:'combatEnd', effect:{goldBonus:10}},
+  {id:'wide_lens', name:'広角のレンズ', rarity:'uncommon', timing:'onPickup', effect:{extraRewardChoices:1}},
+  {id:'archive_compass', name:'書庫の羅針盤', rarity:'uncommon', timing:'onPickup', effect:{rerollTokens:3}},
   {id:'attuned_lens', name:'共鳴のレンズ', rarity:'rare', timing:'onTagCardUsed', triggerTag:'', effect:{block:1}},
 ];
 
@@ -2059,6 +2137,8 @@ function applyRelicEffect(r, relic){
   if(e.goldBonus) r.player.gold += e.goldBonus;
   if(e.extraEnergy) r.player.extraEnergy = (r.player.extraEnergy||0) + e.extraEnergy;
   if(e.extraDraw) r.player.extraDraw = (r.player.extraDraw||0) + e.extraDraw;
+  if(e.extraRewardChoices) r.player.extraRewardChoices = (r.player.extraRewardChoices||0) + e.extraRewardChoices;
+  if(e.rerollTokens) r.player.rerollTokens = (r.player.rerollTokens||0) + e.rerollTokens;
   applyEffectValues(r, {name: relic.name, ...e});
 }
 
@@ -2085,8 +2165,10 @@ const EVENT_TEMPLATES = [
     {label:'何も持たずに立ち去る', apply:()=>'祭壇に背を向け、静かに先へ進んだ。'},
   ]},
   {title:'旅の行商人', desc:'フードを被った商人が道の端に座り、珍しい品を並べている。', choices:[
-    {label:'掘り出し物を買う（40ゴールド消費・アンコモン以上のカードを1枚入手）', cost:40, apply:(r)=>{
-      r.player.gold -= 40;
+    {get label(){ return `掘り出し物を買う（${S.settings.eventMerchantCost}ゴールド消費・アンコモン以上のカードを1枚入手）`; },
+     get cost(){ return S.settings.eventMerchantCost; },
+     apply:(r)=>{
+      r.player.gold -= S.settings.eventMerchantCost;
       const pool = S.cards.filter(c=>(c.rarity==='uncommon'||c.rarity==='rare') && !c.generatedOnly);
       const pick = pool[Math.floor(Math.random()*pool.length)];
       if(pick) r.discard.push(pick.id);
@@ -2167,24 +2249,20 @@ function renderEvent(){
 }
 
 function shopPrice(rarity){
-  return rarity==='rare' ? 150 : (rarity==='uncommon' ? 85 : 50);
+  const c = S.settings;
+  return rarity==='rare' ? c.shopPriceRare : (rarity==='uncommon' ? c.shopPriceUncommon : c.shopPriceCommon);
 }
+function shopRerollCost(r){ return S.settings.rerollShopBase + S.settings.rerollShopStep*r.shopRerollCount; }
 
 function renderShop(){
   const r = S.run;
   if(!r.shopOffers){
-    const used = [];
-    r.shopOffers = [];
-    for(let i=0;i<3;i++){
-      const c = weightedPickCard(used);
-      if(!c) break;
-      used.push(c.id);
-      r.shopOffers.push({cardId:c.id, price:shopPrice(c.rarity), sold:false});
-    }
+    r.shopOffers = generateShopOffers();
+    r.shopRerollCount = 0;
     r.shopRemoveMode = false;
     r.shopUpgradeMode = false;
     const availRelics = S.relics.filter(rel=>!r.player.relics.includes(rel.id));
-    r.shopRelic = availRelics.length ? {...availRelics[Math.floor(Math.random()*availRelics.length)], price:200, sold:false} : null;
+    r.shopRelic = availRelics.length ? {...availRelics[Math.floor(Math.random()*availRelics.length)], price:S.settings.shopRelicPrice, sold:false} : null;
   }
   const totalOwned = ownedCardInstances(r).length;
   const upgradeEligible = ownedCardInstances(r).filter(x=>!isUpgradedInstanceId(x.cid));
@@ -2194,7 +2272,7 @@ function renderShop(){
   <div class="screen center-screen">
     <p class="eyebrow">MERCHANT</p>
     <h2>行商の露店</h2>
-    <p style="font-size:13px; color:var(--gold); margin-top:6px;">所持ゴールド: ${r.player.gold}</p>
+    <p style="font-size:13px; color:var(--gold); margin-top:6px;">所持ゴールド: ${r.player.gold}${S.settings.shopRerollEnabled?` ・ リロールトークン: ${r.player.rerollTokens||0}`:''}</p>
     ${mode==='main' ? `
       <div class="reward-row" id="shop-row">
         ${r.shopOffers.map((o,i)=>{
@@ -2214,18 +2292,19 @@ function renderShop(){
         </div>
       ` : ''}
       <div style="margin-top:18px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-        <button id="btn-shop-remove" ${(r.player.gold<75 || totalOwned<=5)?'disabled':''}>カードを1枚除去する（75G）</button>
-        <button id="btn-shop-upgrade" ${(r.player.gold<100 || upgradeEligible.length===0)?'disabled':''}>カードを1枚強化する（100G）</button>
+        ${S.settings.shopRerollEnabled ? `<button id="btn-shop-reroll" ${(((r.player.rerollTokens||0)>0)||r.player.gold>=shopRerollCost(r))?'':'disabled'}>商品を入れ替える（${(r.player.rerollTokens||0)>0?'トークン1消費':shopRerollCost(r)+'G'}）</button>` : ''}
+        <button id="btn-shop-remove" ${(r.player.gold<S.settings.shopRemoveCost || totalOwned<=5)?'disabled':''}>カードを1枚除去する（${S.settings.shopRemoveCost}G）</button>
+        <button id="btn-shop-upgrade" ${(r.player.gold<S.settings.shopUpgradeCost || upgradeEligible.length===0)?'disabled':''}>カードを1枚強化する（${S.settings.shopUpgradeCost}G）</button>
         <button class="primary" id="btn-shop-leave">店を出る</button>
       </div>
     ` : mode==='remove' ? `
-      <p style="color:var(--parchment-dim); margin-top:10px;">除去するカードを選んでください（75G）</p>
+      <p style="color:var(--parchment-dim); margin-top:10px;">除去するカードを選んでください（${S.settings.shopRemoveCost}G）</p>
       <div class="reward-row" id="remove-row">
         ${ownedCardInstances(r).map((inst,i)=>`<div data-idx="${i}">${renderCardHTML(cardById(inst.cid),{mini:true})}</div>`).join('')}
       </div>
       <button class="ghost" id="btn-remove-cancel">やめる</button>
     ` : `
-      <p style="color:var(--parchment-dim); margin-top:10px;">強化するカードを選んでください（100G）</p>
+      <p style="color:var(--parchment-dim); margin-top:10px;">強化するカードを選んでください（${S.settings.shopUpgradeCost}G）</p>
       <div class="reward-row" id="upgrade-row">
         ${upgradeEligible.map((inst,i)=>`<div data-idx="${i}">${renderCardHTML(cardById(inst.cid),{mini:true})}</div>`).join('')}
       </div>
@@ -2256,6 +2335,12 @@ function renderShop(){
         renderShop();
       };
     }
+    if(qs('#btn-shop-reroll')) qs('#btn-shop-reroll').onclick = ()=>{
+      if(!payReroll(r, shopRerollCost(r))) return;
+      r.shopRerollCount++;
+      r.shopOffers = generateShopOffers();
+      renderShop();
+    };
     qs('#btn-shop-remove').onclick = ()=>{ r.shopRemoveMode = true; renderShop(); };
     qs('#btn-shop-upgrade').onclick = ()=>{ r.shopUpgradeMode = true; renderShop(); };
     qs('#btn-shop-leave').onclick = ()=>{ r.shopOffers=null; r.shopRelic=null; r.floor++; beginFloor(); };
@@ -2265,7 +2350,7 @@ function renderShop(){
         const idx = parseInt(wrap.dataset.idx,10);
         const inst = ownedCardInstances(r)[idx];
         r[inst.pile].splice(inst.i,1);
-        r.player.gold -= 75;
+        r.player.gold -= S.settings.shopRemoveCost;
         r.shopRemoveMode = false;
         renderShop();
       };
@@ -2277,7 +2362,7 @@ function renderShop(){
         const idx = parseInt(wrap.dataset.idx,10);
         const inst = upgradeEligible[idx];
         r[inst.pile][inst.i] = upgradeRawId(inst.cid);
-        r.player.gold -= 100;
+        r.player.gold -= S.settings.shopUpgradeCost;
         r.shopUpgradeMode = false;
         renderShop();
       };
@@ -2290,27 +2375,53 @@ function renderShop(){
 
 function renderReward(){
   const r = S.run;
-  const choices = threeRewardCards();
+  if(!r.rewardChoices){ r.rewardChoices = generateRewardChoices(r, ''); r.rewardRerollCount = 0; }
+  const choices = r.rewardChoices.map(id=>cardById(id)).filter(Boolean);
+  const cfg = S.settings;
+  const tags = cfg.tagFocusEnabled ? rewardableTags() : [];
+  const focus = (r.rewardFocusTag && tags.includes(r.rewardFocusTag)) ? r.rewardFocusTag : '';
+  const tokens = r.player.rerollTokens||0;
+  const cost = cfg.rerollRewardBase + cfg.rerollRewardStep*r.rewardRerollCount + (focus ? cfg.rerollTagExtra : 0);
+  const canReroll = tokens>0 || r.player.gold>=cost;
   app().innerHTML = `
   <div class="screen center-screen">
     <p class="eyebrow">VICTORY</p>
     <h2>戦利品を選べ</h2>
     <p style="color:var(--parchment-dim); margin-top:6px;">1枚選んでデッキに加えるか、スキップできる。</p>
-    <p style="font-size:13px; color:var(--gold); margin-top:4px;">ゴールド +${r.lastGoldGained}（所持: ${r.player.gold}）</p>
+    <p style="font-size:13px; color:var(--gold); margin-top:4px;">ゴールド +${r.lastGoldGained}（所持: ${r.player.gold}）${cfg.rewardRerollEnabled?` ・ リロールトークン: ${tokens}`:''}</p>
     <div class="reward-row" id="reward-row">
       ${choices.map((c,i)=>`<div data-idx="${i}">${renderCardHTML(c)}</div>`).join('')}
     </div>
-    <button class="ghost" id="btn-skip">受け取らずに進む</button>
+    ${cfg.rewardRerollEnabled ? `
+    <div style="margin-top:14px; display:flex; gap:10px; justify-content:center; align-items:center; flex-wrap:wrap;">
+      ${cfg.tagFocusEnabled ? `<select id="reward-focus">
+        <option value="">タグ指定なし</option>
+        ${tags.map(t=>`<option value="${t}" ${focus===t?'selected':''}>[${t}] を狙う</option>`).join('')}
+      </select>` : ''}
+      <button id="btn-reroll" ${canReroll?'':'disabled'}>${focus?'狙い撃ちリロール':'リロール'}（${tokens>0?'トークン1消費':cost+'G'}）</button>
+    </div>
+    ${cfg.tagFocusEnabled ? `<p style="font-size:11px; color:var(--parchment-dim); margin-top:6px;">タグを指定すると、1枚目はそのタグのカードになり、他の枠も出やすくなる（ゴールド払いは+${cfg.rerollTagExtra}G）。</p>` : ''}` : ''}
+    <button class="ghost" id="btn-skip" style="margin-top:10px;">受け取らずに進む${(cfg.rewardRerollEnabled&&cfg.skipTokenEnabled)?'（リロールトークン+1）':''}</button>
   </div>`;
+  const finish = ()=>{ r.rewardChoices=null; r.rewardRerollCount=0; r.rewardFocusTag=''; r.floor++; beginFloor(); };
   qsa('#reward-row > div').forEach(wrap=>{
     wrap.querySelector('.card').onclick = ()=>{
       const idx = parseInt(wrap.dataset.idx,10);
       r.discard.push(choices[idx].id);
-      r.floor++;
-      beginFloor();
+      finish();
     };
   });
-  qs('#btn-skip').onclick = ()=>{ r.floor++; beginFloor(); };
+  if(qs('#reward-focus')) qs('#reward-focus').onchange = ()=>{ r.rewardFocusTag = qs('#reward-focus').value; renderReward(); };
+  if(qs('#btn-reroll')) qs('#btn-reroll').onclick = ()=>{
+    if(!payReroll(r, cost)) return;
+    r.rewardRerollCount++;
+    r.rewardChoices = generateRewardChoices(r, focus);
+    renderReward();
+  };
+  qs('#btn-skip').onclick = ()=>{
+    if(cfg.rewardRerollEnabled && cfg.skipTokenEnabled) r.player.rerollTokens = (r.player.rerollTokens||0) + 1;
+    finish();
+  };
 }
 
 /* ============================= VICTORY / DEFEAT ============================= */
