@@ -484,10 +484,11 @@ function cardDescription(c){
     const rangeLabel = isGenerate
       ? ((GENERATE_POOL_OPTIONS.find(p=>p.key===c.cardOp.genPool)||{}).label || c.cardOp.genPool)
       : ((PILE_OPTIONS.find(p=>p.key===c.cardOp.fromPile)||{}).label || c.cardOp.fromPile);
-    const countText = c.cardOp.countMode==='all' ? '対象すべて'
+    const seqText = (c.cardOp.sequential && c.cardOp.countMode!=='all') ? '（1枚ずつ選び直し）' : '';
+    const countText = (c.cardOp.countMode==='all' ? '対象すべて'
       : c.cardOp.countMode==='choose' ? `任意の${c.cardOp.countFixed}枚`
       : c.cardOp.countMode==='random' ? `${c.cardOp.countMin}〜${c.cardOp.countMax}枚`
-      : `${c.cardOp.countFixed}枚`;
+      : `${c.cardOp.countFixed}枚`) + seqText;
     const tagText = c.cardOp.filterTag ? `[${c.cardOp.filterTag}]の` : '';
     if(c.cardOp.type==='grantBuff'){
       const fieldDef = EFFECT_FIELD_DEFS.find(d=>d.key===c.cardOp.buffField);
@@ -791,6 +792,26 @@ function pickWithReplacement(entries, count){
 // it as asynchronous and continue its own work from inside `done`.
 function resolveCardOp(r, op, done){
   if(!op || !op.enabled){ done(); return; }
+
+  // "Re-pick one at a time": instead of choosing every target up front, pick one, resolve it,
+  // then pick the next from the pile as it stands afterwards (so cards drawn/moved by the
+  // first one can be picked, and a "choose" op prompts the player once per card).
+  if(op.sequential && op.countMode!=='all'){
+    let n;
+    if(op.countMode==='random'){
+      const lo = Math.min(op.countMin!==undefined?op.countMin:1, op.countMax!==undefined?op.countMax:1);
+      const hi = Math.max(op.countMin!==undefined?op.countMin:1, op.countMax!==undefined?op.countMax:1);
+      n = lo + Math.floor(Math.random()*(hi-lo+1));
+    } else n = op.countFixed!==undefined ? op.countFixed : 1;
+    const single = {...op, sequential:false, countMode: op.countMode==='choose' ? 'choose' : 'fixed', countFixed:1};
+    let i = 0;
+    (function nextPick(){
+      if(i>=n || r.enemy.hp<=0 || r.player.hp<=0){ done(); return; }
+      i++;
+      resolveCardOp(r, single, nextPick);
+    })();
+    return;
+  }
   const isGenerate = GENERATE_TYPES.includes(op.type);
 
   let entries = isGenerate ? collectGeneratePool(op) : collectPileEntries(r, op.fromPile || 'hand');
@@ -1035,37 +1056,48 @@ function applyEffectValues(r, c){
   if(loseHpVal>0){ r.player.hp = Math.max(0, r.player.hp - loseHpVal); }
 }
 
+// One repetition of a card's effect: its numeric effects plus its card-operation.
+function applyCardEffectsOnce(r, c, done){
+  applyEffectValues(r, c);
+  if(c.cardOp && c.cardOp.enabled){
+    resolveCardOp(r, c.cardOp, done);
+  } else {
+    done();
+  }
+}
+
+// Repeats a card's effect "hits" times. Used when a registered trigger fires later:
+// the repeats belong to that one trigger activation, so they don't count as extra card uses.
 function applyCardEffects(r, c, done){
   const replays = Math.max(1, (c.hits||1) + scaleBonus(c,'hits'));
   let rep = 0;
   (function step(){
     if(rep>=replays || r.enemy.hp<=0 || r.player.hp<=0){ done(); return; }
     rep++;
-    applyEffectValues(r, c);
-
-    if(c.cardOp && c.cardOp.enabled){
-      resolveCardOp(r, c.cardOp, ()=>{
-        if(r.enemy.hp<=0 || r.player.hp<=0){ done(); return; }
-        step();
-      });
-    } else {
+    applyCardEffectsOnce(r, c, ()=>{
+      if(r.enemy.hp<=0 || r.player.hp<=0){ done(); return; }
       step();
-    }
+    });
   })();
 }
 
-// Shared "this card is now being used" bookkeeping: play-count/tag tracking, letting
-// existing trigger-cards react, then either resolving the effect immediately or
-// registering it as a new trigger, depending on the card's own timing setting.
-function resolveCardPlayCore(r, c, done){
+// Counts one "use" of a card (play count, tags used this turn) and lets tag-based
+// reactions (relics, then previously registered card triggers) fire for it.
+function registerCardUse(r, c, done){
   r.cardsPlayedThisTurn = (r.cardsPlayedThisTurn||0) + 1;
   if(c.tags && c.tags.length){ r.tagsPlayedThisTurn = (r.tagsPlayedThisTurn||[]).concat(c.tags); }
   fireRelicTiming(r, 'onTagCardUsed', c);
+  fireMatchingTriggers(r, c, done);
+}
 
-  // Existing triggers (registered by earlier cards this combat/turn) react to this play,
-  // before this card's own trigger (if any) is registered below.
-  fireMatchingTriggers(r, c, ()=>{
-    if(c.timing === 'trigger'){
+// Shared "this card is now being used" logic (energy is paid by the caller, once).
+// A card that resolves immediately counts as one separate use per hit: each hit
+// re-fires tag triggers and adds to the play/tag counts, then resolves one repetition of
+// its effect. A card set to "trigger" timing only registers once; its hits multiply
+// the effect each time the trigger later fires.
+function resolveCardPlayCore(r, c, done){
+  if(c.timing === 'trigger'){
+    registerCardUse(r, c, ()=>{
       r.activeTriggers.push({
         triggerTag: c.triggerTag || '',
         duration: c.duration || 'combat',
@@ -1073,10 +1105,19 @@ function resolveCardPlayCore(r, c, done){
       });
       pushLog(`${c.name}: 効果を仕込んだ（今後の該当カード使用時に発動）。`);
       done();
-    } else {
-      applyCardEffects(r, c, done);
-    }
-  });
+    });
+    return;
+  }
+  const uses = Math.max(1, (c.hits||1) + scaleBonus(c,'hits'));
+  let use = 0;
+  (function nextUse(){
+    if(use>=uses || r.enemy.hp<=0 || r.player.hp<=0){ done(); return; }
+    use++;
+    registerCardUse(r, c, ()=>{
+      if(r.enemy.hp<=0 || r.player.hp<=0){ done(); return; }
+      applyCardEffectsOnce(r, c, nextUse);
+    });
+  })();
 }
 
 function fireMatchingTriggers(r, playedCard, done){
@@ -1404,6 +1445,8 @@ function openCardModal(card, isNew){
         </div>
         <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">対象タグ絞り込み（空欄で絞り込みなし）</div>
         <input type="text" id="m-op-filtertag" value="${(c.cardOp&&c.cardOp.filterTag)||''}" style="width:100%;">
+        <div class="checkbox-field" style="margin-top:8px; margin-bottom:4px;"><input type="checkbox" id="m-op-sequential" ${c.cardOp&&c.cardOp.sequential?'checked':''}><label for="m-op-sequential">1枚ずつ選び直す（1枚処理するたびに次の1枚を選ぶ）</label></div>
+        <div class="hint">オフ＝最初に全部まとめて選ぶ。オン＝1枚処理してから次を選ぶので、直前の効果で増減した手札なども対象になります（任意選択なら1枚ずつ選択画面が出ます。「対象すべて」では無効）。</div>
         <div id="op-permanent-field" style="${c.cardOp&&CARDOP_REVERTIBLE_TYPES.includes(c.cardOp.type)?'':'display:none;'} margin-top:10px;">
           <div class="checkbox-field" style="margin-bottom:4px;"><input type="checkbox" id="m-op-permanent" ${c.cardOp&&c.cardOp.permanent?'checked':''}><label for="m-op-permanent">永続にする（戦闘後も元に戻さない）</label></div>
           <div class="hint">オフ＝この戦闘中のみ（強化・付与・複製・生成は戦闘後に元へ戻る）。消滅は、オンにするとそのカードを探索から完全に取り除きます。</div>
@@ -1500,6 +1543,7 @@ function openCardModal(card, isNew){
       countMin: clampInt(qs('#m-op-countmin',overlay).value,0,20,1),
       countMax: clampInt(qs('#m-op-countmax',overlay).value,0,20,1),
       filterTag: (qs('#m-op-filtertag',overlay).value||'').trim(),
+      sequential: qs('#m-op-sequential',overlay).checked,
       buffField: qs('#m-op-bufffield',overlay).value,
       buffAmount: clampInt(qs('#m-op-buffamount',overlay).value,-99,99,0),
       permanent: qs('#m-op-permanent',overlay).checked,
