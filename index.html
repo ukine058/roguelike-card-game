@@ -360,7 +360,9 @@ function upgradeRawId(raw){
 // Their instance id is registered in r.temporaryCardIids; this strips any such card
 // out of every pile (and drops its buff record) once the fight is over.
 function purgeTemporaryCards(r){
-  if(!r.temporaryCardIids) { r.temporaryCardIids = {}; return; }
+  if(!r.temporaryCardIids) r.temporaryCardIids = {};
+  if(!r.tempInstanceBuffs) r.tempInstanceBuffs = {};
+  if(!r.tempUpgradeIids) r.tempUpgradeIids = {};
   const isTemp = (rawId)=>{
     const {iid} = splitInstanceId(rawId);
     return !!(iid && r.temporaryCardIids[iid]);
@@ -374,9 +376,18 @@ function purgeTemporaryCards(r){
         return false;
       }
       return true;
+    }).map(rawId=>{
+      // Undo combat-only upgrades granted by a (non-permanent) card-operation.
+      const {cid, iid} = splitInstanceId(rawId);
+      if(iid && r.tempUpgradeIids[iid] && typeof cid==='string' && cid.endsWith('+')){
+        return withInstanceSuffix(cid.slice(0,-1), iid);
+      }
+      return rawId;
     });
   });
   r.temporaryCardIids = {};
+  r.tempInstanceBuffs = {};   // combat-only stat grants wear off
+  r.tempUpgradeIids = {};
 }
 
 function isUpgradedInstanceId(raw){
@@ -412,10 +423,13 @@ function cardById(id){
     card = S.cards.find(c=>c.id===cid);
   }
   if(!card) return null;
-  const buffs = iid && S.run && S.run.instanceBuffs && S.run.instanceBuffs[iid];
-  if(buffs && Object.keys(buffs).length){
+  const permBuffs = iid && S.run && S.run.instanceBuffs && S.run.instanceBuffs[iid];
+  const tempBuffs = iid && S.run && S.run.tempInstanceBuffs && S.run.tempInstanceBuffs[iid];
+  if((permBuffs && Object.keys(permBuffs).length) || (tempBuffs && Object.keys(tempBuffs).length)){
     const merged = {...card};
-    Object.keys(buffs).forEach(k=>{ merged[k] = (merged[k]||0) + buffs[k]; });
+    [permBuffs, tempBuffs].forEach(b=>{
+      if(b) Object.keys(b).forEach(k=>{ merged[k] = (merged[k]||0) + b[k]; });
+    });
     return merged;
   }
   return card;
@@ -460,6 +474,9 @@ function cardDescription(c){
       parts.push(`${rangeLabel}${tagText?`（${tagText.slice(0,-1)}）`:''}から${countText}${typeLabel}`);
     } else {
       parts.push(`${rangeLabel}の${tagText}カードを${countText}${typeLabel}`);
+    }
+    if(CARDOP_REVERTIBLE_TYPES.includes(c.cardOp.type)){
+      parts.push(c.cardOp.permanent ? '（永続：戦闘後も残る）' : '（この戦闘中のみ）');
     }
   }
   if(c.tags && c.tags.length) parts.push(`タグ: ${c.tags.join(', ')}`);
@@ -677,6 +694,9 @@ const CARDOP_TYPES = [
   {key:'generatePlay', label:'カードを生成し、コストを消費せず使用する'},
 ];
 const GENERATE_TYPES = ['generateToHand','generateToDraw','generatePlay'];
+// Ops whose result normally only lasts for the current combat (reverted afterwards),
+// unless the op is flagged "permanent".
+const CARDOP_REVERTIBLE_TYPES = ['upgrade','duplicate','grantBuff','moveToExhausted','generateToHand','generateToDraw','generatePlay'];
 const PILE_OPTIONS = [
   {key:'hand', label:'手札'},
   {key:'draw', label:'山札'},
@@ -760,7 +780,7 @@ function resolveCardOp(r, op, done){
     if(isGenerate){
       const newIds = selected.map(e=>{
         const iid = newId();
-        r.temporaryCardIids[iid] = true;
+        if(!op.permanent) r.temporaryCardIids[iid] = true;
         return withInstanceSuffix(e.rawId, iid);
       });
       if(op.type==='generateToHand'){
@@ -797,25 +817,46 @@ function resolveCardOp(r, op, done){
     }
 
     if(op.type==='upgrade'){
-      selected.forEach(e=>{ r[e.pile][e.idx] = upgradeRawId(e.rawId); });
-      pushLog(`${selected.length}枚のカードを強化した。`);
+      selected.forEach(e=>{
+        if(op.permanent){
+          r[e.pile][e.idx] = upgradeRawId(e.rawId);
+        } else {
+          // Temporary upgrade: the copy needs its own identity so it can be reverted
+          // (and only it) once the combat is over.
+          const {cid, iid} = splitInstanceId(e.rawId);
+          const useIid = iid || newId();
+          r.tempUpgradeIids[useIid] = true;
+          r[e.pile][e.idx] = withInstanceSuffix(cid+'+', useIid);
+        }
+      });
+      pushLog(`${selected.length}枚のカードを強化した${op.permanent?'（永続）':'（この戦闘中のみ）'}。`);
       done(); return;
     }
     if(op.type==='duplicate'){
       // A duplicate is a fresh, unbuffed copy of the base card — it does not inherit
-      // any per-instance buff granted to the original physical card.
-      selected.forEach(e=>{ r.discard.push(splitInstanceId(e.rawId).cid); });
-      pushLog(`${selected.length}枚のカードを複製した。`);
+      // any per-instance buff granted to the original physical card. Unless permanent,
+      // the copy is registered as temporary and vanishes when the combat ends.
+      selected.forEach(e=>{
+        const cid = splitInstanceId(e.rawId).cid;
+        if(op.permanent){ r.discard.push(cid); }
+        else{
+          const iid = newId();
+          r.temporaryCardIids[iid] = true;
+          r.discard.push(withInstanceSuffix(cid, iid));
+        }
+      });
+      pushLog(`${selected.length}枚のカードを複製した${op.permanent?'（永続）':'（この戦闘中のみ）'}。`);
       done(); return;
     }
     if(op.type==='grantBuff'){
       const field = op.buffField; const amount = op.buffAmount||0;
       if(field && amount){
+        const store = op.permanent ? r.instanceBuffs : r.tempInstanceBuffs;
         selected.forEach(e=>{
           const {cid, iid} = splitInstanceId(e.rawId);
-          let useIid = iid;
-          if(!useIid){ useIid = newId(); r.instanceBuffs[useIid] = {}; }
-          r.instanceBuffs[useIid][field] = (r.instanceBuffs[useIid][field]||0) + amount;
+          const useIid = iid || newId();
+          if(!store[useIid]) store[useIid] = {};
+          store[useIid][field] = (store[useIid][field]||0) + amount;
           r[e.pile][e.idx] = withInstanceSuffix(cid, useIid);
         });
         const fieldDef = EFFECT_FIELD_DEFS.find(d=>d.key===field);
@@ -852,6 +893,16 @@ function resolveCardOp(r, op, done){
     const destMap = {moveToHand:'hand', moveToDiscard:'discard', moveToDraw:'draw', moveToExhausted:'exhausted'};
     const dest = destMap[op.type];
     if(!dest){ done(); return; }
+    if(op.type==='moveToExhausted' && op.permanent){
+      // Permanent exhaust: the card is destroyed for the rest of the run.
+      removeEntries(r, selected);
+      selected.forEach(e=>{
+        const {iid} = splitInstanceId(e.rawId);
+        if(iid){ delete r.instanceBuffs[iid]; delete r.tempInstanceBuffs[iid]; delete r.tempUpgradeIids[iid]; }
+      });
+      pushLog(`${selected.length}枚のカードを永久に消滅させた。`);
+      done(); return;
+    }
     removeEntries(r, selected);
     const movedIds = selected.map(e=>e.rawId);
     if(dest==='draw'){ r.draw = shuffle([...r.draw, ...movedIds]); }
@@ -1322,6 +1373,10 @@ function openCardModal(card, isNew){
         </div>
         <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">対象タグ絞り込み（空欄で絞り込みなし）</div>
         <input type="text" id="m-op-filtertag" value="${(c.cardOp&&c.cardOp.filterTag)||''}" style="width:100%;">
+        <div id="op-permanent-field" style="${c.cardOp&&CARDOP_REVERTIBLE_TYPES.includes(c.cardOp.type)?'':'display:none;'} margin-top:10px;">
+          <div class="checkbox-field" style="margin-bottom:4px;"><input type="checkbox" id="m-op-permanent" ${c.cardOp&&c.cardOp.permanent?'checked':''}><label for="m-op-permanent">永続にする（戦闘後も元に戻さない）</label></div>
+          <div class="hint">オフ＝この戦闘中のみ（強化・付与・複製・生成は戦闘後に元へ戻る）。消滅は、オンにするとそのカードを探索から完全に取り除きます。</div>
+        </div>
         <div id="op-buff-fields" style="${c.cardOp&&c.cardOp.type==='grantBuff'?'':'display:none;'} margin-top:10px;">
           <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">付与する効果</div>
           <select id="m-op-bufffield" style="margin-bottom:8px; width:100%;">
@@ -1359,6 +1414,7 @@ function openCardModal(card, isNew){
   qs('#m-op-type',overlay).onchange = ()=>{
     const t = qs('#m-op-type',overlay).value;
     qs('#op-buff-fields',overlay).style.display = t==='grantBuff' ? 'block' : 'none';
+    qs('#op-permanent-field',overlay).style.display = CARDOP_REVERTIBLE_TYPES.includes(t) ? 'block' : 'none';
     const isGen = GENERATE_TYPES.includes(t);
     qs('#op-frompile-field',overlay).style.display = isGen ? 'none' : 'block';
     qs('#op-genpool-field',overlay).style.display = isGen ? 'block' : 'none';
@@ -1415,6 +1471,7 @@ function openCardModal(card, isNew){
       filterTag: (qs('#m-op-filtertag',overlay).value||'').trim(),
       buffField: qs('#m-op-bufffield',overlay).value,
       buffAmount: clampInt(qs('#m-op-buffamount',overlay).value,-99,99,0),
+      permanent: qs('#m-op-permanent',overlay).checked,
     } : { enabled:false };
     if(isNew){ S.cards.push(updated); }
     else{ S.cards = S.cards.map(x=> x.id===updated.id? updated : x); }
@@ -1500,6 +1557,7 @@ function startRun(){
       permStrength:0, permMetallicize:0, thorns:0, permThorns:0, gold:0,
       dexterity:0, permDexterity:0, regen:0,
       extraEnergy:0, extraDraw:0, relics:[],
+      rerollTokens:0, extraRewardChoices:0,
     },
     floor: 1,
     enemy: null,
@@ -1519,7 +1577,12 @@ function startRun(){
     battlesSinceSpecial:0,
     activeTriggers:[],
     instanceBuffs:{},
+    tempInstanceBuffs:{},
+    tempUpgradeIids:{},
     temporaryCardIids:{},
+    rewardChoices:null,
+    rewardRerollCount:0,
+    shopRerollCount:0,
   };
   S.run.draw = shuffle(S.run.deck);
   S.run.deck = [];
