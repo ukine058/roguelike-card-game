@@ -245,20 +245,72 @@ const DEFAULT_CARDS = [
   {id:'blood_gambit', name:'血の代償', type:'attack', cost:1, rarity:'rare', startingCount:0,
     damage:2, block:0, draw:0, energy:0, strength:0, permStrength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, permMetallicize:0, loseHp:0, exhaust:false,
     hits:1, tags:['血'], scales:{ damage:{source:'playerMissingHp', tag:'', perPoint:0.5} }},
+
+  {id:'enemy_atk_5', name:'攻撃（5）', type:'attack', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:5, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_atk_6', name:'攻撃（6）', type:'attack', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:6, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_atk_7', name:'攻撃（7）', type:'attack', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:7, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_atk_8', name:'攻撃（8）', type:'attack', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:8, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_atk_9', name:'攻撃（9）', type:'attack', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:9, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_atk_11', name:'攻撃（11）', type:'attack', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:11, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_atk_12', name:'攻撃（12）', type:'attack', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:12, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_atk_14', name:'攻撃（14）', type:'attack', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:14, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_atk_16', name:'攻撃（16）', type:'attack', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:16, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_atk_20', name:'攻撃（20）', type:'attack', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:20, block:0, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_def_5', name:'防御（5）', type:'skill', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:0, block:5, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_def_6', name:'防御（6）', type:'skill', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:0, block:6, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_def_8', name:'防御（8）', type:'skill', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:0, block:8, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_def_10', name:'防御（10）', type:'skill', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:0, block:10, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_def_12', name:'防御（12）', type:'skill', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:0, block:12, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_def_15', name:'防御（15）', type:'skill', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:0, block:15, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_def_18', name:'防御（18）', type:'skill', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:0, block:18, draw:0, energy:0, strength:0, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_buf_1', name:'強化（1）', type:'skill', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:0, block:0, draw:0, energy:0, strength:1, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_buf_2', name:'強化（2）', type:'skill', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:0, block:0, draw:0, energy:0, strength:2, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
+  {id:'enemy_buf_3', name:'強化（3）', type:'skill', cost:0, rarity:'common', startingCount:0, usableBy:'enemy', generatedOnly:true,
+    damage:0, block:0, draw:0, energy:0, strength:3, weak:0, vulnerable:0, poison:0, heal:0, metallicize:0, loseHp:0, exhaust:false},
 ];
 
-const ENEMY_TEMPLATES = [
-  {name:'洞窟のスライム', emoji:'🟢', baseHp:38, elite:false, moves:[{type:'attack',damage:9},{type:'attack',damage:9},{type:'defend',block:6}]},
-  {name:'錆びたゴブリン', emoji:'👺', baseHp:34, elite:false, moves:[{type:'attack',damage:7},{type:'buff',strength:2},{type:'attack',damage:7}]},
-  {name:'徘徊する骸骨', emoji:'💀', baseHp:42, elite:false, moves:[{type:'defend',block:8},{type:'attack',damage:12}]},
-  {name:'森の盗賊', emoji:'🗡️', baseHp:40, elite:false, moves:[{type:'attack',damage:6},{type:'attack',damage:6},{type:'attack',damage:14}]},
-  {name:'狂った渡り鴉', emoji:'🐦‍⬛', baseHp:30, elite:false, moves:[{type:'attack',damage:5},{type:'buff',strength:1},{type:'attack',damage:5},{type:'attack',damage:5}]},
-  {name:'穴居の蜘蛛', emoji:'🕷️', baseHp:36, elite:false, moves:[{type:'defend',block:5},{type:'attack',damage:8},{type:'attack',damage:8}]},
-  {name:'鉄鎧のオーガ', emoji:'👹', baseHp:75, elite:true, moves:[{type:'attack',damage:16},{type:'defend',block:12},{type:'attack',damage:16},{type:'buff',strength:3}]},
-  {name:'堕ちた騎士', emoji:'⚔️', baseHp:80, elite:true, moves:[{type:'buff',strength:2},{type:'attack',damage:14},{type:'attack',damage:14},{type:'defend',block:10}]},
-  {name:'彷徨う怨霊', emoji:'👻', baseHp:68, elite:true, moves:[{type:'attack',damage:11},{type:'attack',damage:11},{type:'attack',damage:11},{type:'defend',block:15}]},
-  {name:'灰燼の竜', emoji:'🐉', baseHp:140, elite:true, boss:true, moves:[{type:'attack',damage:20},{type:'buff',strength:3},{type:'attack',damage:14},{type:'attack',damage:14},{type:'defend',block:18}]},
+const DEFAULT_ENEMIES = [
+  {id:'cave_slime', name:'洞窟のスライム', emoji:'🟢', category:'normal', baseHp:38, weight:1,
+    moveIds:['enemy_atk_9','enemy_atk_9','enemy_def_6'], startEffect:{}},
+  {id:'rusty_goblin', name:'錆びたゴブリン', emoji:'👺', category:'normal', baseHp:34, weight:1,
+    moveIds:['enemy_atk_7','enemy_buf_2','enemy_atk_7'], startEffect:{}},
+  {id:'wandering_skeleton', name:'徘徊する骸骨', emoji:'💀', category:'normal', baseHp:42, weight:1,
+    moveIds:['enemy_def_8','enemy_atk_12'], startEffect:{}},
+  {id:'forest_bandit', name:'森の盗賊', emoji:'🗡️', category:'normal', baseHp:40, weight:1,
+    moveIds:['enemy_atk_6','enemy_atk_6','enemy_atk_14'], startEffect:{}},
+  {id:'mad_raven', name:'狂った渡り鴉', emoji:'🐦‍⬛', category:'normal', baseHp:30, weight:1,
+    moveIds:['enemy_atk_5','enemy_buf_1','enemy_atk_5','enemy_atk_5'], startEffect:{}},
+  {id:'cave_spider', name:'穴居の蜘蛛', emoji:'🕷️', category:'normal', baseHp:36, weight:1,
+    moveIds:['enemy_def_5','enemy_atk_8','enemy_atk_8'], startEffect:{}},
+  {id:'iron_ogre', name:'鉄鎧のオーガ', emoji:'👹', category:'elite', baseHp:75, weight:1,
+    moveIds:['enemy_atk_16','enemy_def_12','enemy_atk_16','enemy_buf_3'], startEffect:{}},
+  {id:'fallen_knight', name:'堕ちた騎士', emoji:'⚔️', category:'elite', baseHp:80, weight:1,
+    moveIds:['enemy_buf_2','enemy_atk_14','enemy_atk_14','enemy_def_10'], startEffect:{}},
+  {id:'wandering_wraith', name:'彷徨う怨霊', emoji:'👻', category:'elite', baseHp:68, weight:1,
+    moveIds:['enemy_atk_11','enemy_atk_11','enemy_atk_11','enemy_def_15'], startEffect:{}},
+  {id:'ash_dragon', name:'灰燼の竜', emoji:'🐉', category:'boss', baseHp:140, weight:1,
+    moveIds:['enemy_atk_20','enemy_buf_3','enemy_atk_14','enemy_atk_14','enemy_def_18'], startEffect:{}},
 ];
+
 
 // On/off switches for the card-acquisition helpers.
 const SETTING_TOGGLES = [
@@ -310,6 +362,7 @@ function migrateCard(c){
     delete c.cardOp.triggerTag;
     delete c.cardOp.duration;
   }
+  if(!c.usableBy) c.usableBy = 'player';
   return c;
 }
 function loadCards(){
@@ -336,6 +389,34 @@ function migrateRelic(rel){
   if(rel && !rel.timing) rel.timing = 'onPickup';
   return rel;
 }
+function migrateCustomStatus(st){ return st; } // no format changes yet
+function loadCustomStatuses(){
+  try{
+    const value = localStorage.getItem('customStatuses');
+    if(value) return JSON.parse(value).map(migrateCustomStatus);
+  }catch(e){ console.error(e); }
+  return [];
+}
+function saveCustomStatuses(list){
+  try{ localStorage.setItem('customStatuses', JSON.stringify(list)); }catch(e){ console.error(e); }
+}
+function migrateEnemy(e){
+  if(!e.category) e.category = e.boss ? 'boss' : (e.elite ? 'elite' : 'normal');
+  if(!e.weight) e.weight = 1;
+  if(!Array.isArray(e.moveIds)) e.moveIds = [];
+  if(!e.startEffect || typeof e.startEffect!=='object') e.startEffect = {};
+  return e;
+}
+function loadEnemies(){
+  try{
+    const value = localStorage.getItem('enemies');
+    if(value) return JSON.parse(value).map(migrateEnemy);
+  }catch(e){ console.error(e); }
+  return DEFAULT_ENEMIES;
+}
+function saveEnemies(list){
+  try{ localStorage.setItem('enemies', JSON.stringify(list)); }catch(e){ console.error(e); }
+}
 function loadRelics(){
   try{
     const value = localStorage.getItem('relics');
@@ -353,6 +434,8 @@ const S = {
   screen: 'loading',
   cards: [],
   relics: [],
+  customStatuses: [],
+  enemies: [],
   settings: {...DEFAULT_SETTINGS},
   run: null, // battle/run state
   editingCard: null,
@@ -424,7 +507,7 @@ function upgradedCardView(base){
   const upg = base.upgrades || {};
   up.cost = Math.max(0, (base.cost||0) + (upg.costDelta||0));
   up.scales = {};
-  EFFECT_FIELD_DEFS.forEach(def=>{
+  allEffectFieldDefs().forEach(def=>{
     const baseVal = base[def.key]!==undefined ? base[def.key] : (def.default||0);
     const min = def.min!==undefined ? def.min : 0;
     up[def.key] = Math.max(min, baseVal + (upg[def.key]||0));
@@ -463,7 +546,7 @@ function cardById(id){
 
 function cardDescription(c){
   const parts = [];
-  EFFECT_FIELD_DEFS.forEach(def=>{
+  allEffectFieldDefs().forEach(def=>{
     const base = c[def.key]!==undefined ? c[def.key] : (def.default||0);
     const show = def.showIf ? def.showIf(base) : base>0;
     if(show) parts.push(def.desc(base));
@@ -556,6 +639,9 @@ function renderHome(){
       <button id="btn-editor">カードを編集する</button>
       <button id="btn-relic-editor">レリックを編集する</button>
       <button id="btn-settings">ルール設定</button>
+      <button id="btn-statuses">カスタム状態を編集</button>
+      <button id="btn-enemies">敵を編集</button>
+      <button id="btn-data">データの保存・読み込み</button>
     </div>
     <p class="home-foot">全${S.cards.length}種のカード ・ 全${S.relics.length}種のレリック ・ 全${S.settings.floorCount}階層の探索</p>
   </div>`;
@@ -563,6 +649,339 @@ function renderHome(){
   qs('#btn-editor').onclick = ()=>{ S.screen='editor'; renderEditor(); };
   qs('#btn-relic-editor').onclick = ()=>{ S.screen='relicEditor'; renderRelicEditor(); };
   qs('#btn-settings').onclick = ()=>{ S.screen='settings'; renderSettings(); };
+  qs('#btn-data').onclick = ()=>{ S.screen='data'; dataScreenState.msg=''; dataScreenState.pending=null; renderDataScreen(); };
+  qs('#btn-statuses').onclick = ()=>{ S.screen='statuses'; renderStatusEditor(); };
+  qs('#btn-enemies').onclick = ()=>{ S.screen='enemies'; renderEnemyEditor(); };
+}
+
+/* ============================= DATA SAVE / LOAD ============================= */
+
+// Everything the player edits (cards, relics, rules) can be exported to one JSON file and
+// imported on another device or browser. To add a new kind of data later (custom statuses,
+// enemies...), add one entry to DATA_SECTIONS — export, import, preview and backup pick it up.
+// To change the file format, bump SAVE_FORMAT_VERSION and add a converter to SAVE_MIGRATIONS.
+const SAVE_APP_ID = 'ashbound-codex';
+const SAVE_FORMAT_VERSION = 1;
+const BACKUP_KEY = 'backup_before_import';
+// SAVE_MIGRATIONS[1] = (d)=>{ ...convert v1 data to v2...; d.version = 2; return d; };
+const SAVE_MIGRATIONS = {};
+
+function escapeHtml(t){
+  return String(t).replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+// IDs: letters, digits, _ and - only. A trailing "+" marks an upgraded card and "::" separates
+// an instance id, so neither may appear in an id.
+function validSaveId(id){ return typeof id==='string' && /^[A-Za-z0-9_-]{1,64}$/.test(id); }
+
+// Names are inserted into the page as HTML (also inside value="..."), so strip the characters
+// that could break out of it from anything that arrives in a file.
+function deepClean(v){
+  if(typeof v==='string') return v.replace(/[<>"]/g,'');
+  if(Array.isArray(v)) return v.map(deepClean);
+  if(v && typeof v==='object'){
+    const o = {};
+    Object.keys(v).forEach(k=>{ if(k!=='__proto__') o[k] = deepClean(v[k]); });
+    return o;
+  }
+  return v;
+}
+
+// Fill in anything missing on imported items rather than trusting the file.
+function normalizeCard(c){
+  c = migrateCard({...c});
+  c.cost = Number.isFinite(c.cost) ? Math.max(0, Math.floor(c.cost)) : 1;
+  if(!RARITY_LABEL[c.rarity]) c.rarity = 'common';
+  if(!Array.isArray(c.tags)) c.tags = [];
+  if(!c.scales || typeof c.scales!=='object') c.scales = {};
+  if(!Number.isFinite(c.startingCount)) c.startingCount = 0;
+  return c;
+}
+function normalizeRelic(r){
+  r = migrateRelic({...r});
+  if(!['common','uncommon','rare'].includes(r.rarity)) r.rarity = 'common';
+  if(!r.effect || typeof r.effect!=='object') r.effect = {};
+  if(!RELIC_TIMINGS.some(t=>t.key===r.timing)) r.timing = 'onPickup';
+  if(typeof r.triggerTag!=='string') r.triggerTag = '';
+  return r;
+}
+function normalizeCustomStatus(st){
+  st = migrateCustomStatus({...st});
+  if(st.target!=='opponent') st.target = 'self';
+  if(!['fixed','perStack'].includes(st.magnitudeMode)) st.magnitudeMode = 'fixed';
+  if(!Number.isFinite(st.magnitudeValue)) st.magnitudeValue = 1;
+  if(!Number.isFinite(st.perTurnDelta)) st.perTurnDelta = 0;
+  if(!st.cardOp || typeof st.cardOp!=='object') st.cardOp = {enabled:false};
+  if(st.target!=='self') st.cardOp = {enabled:false};
+  return st;
+}
+function normalizeEnemy(e){
+  e = migrateEnemy({...e});
+  if(!['normal','elite','boss'].includes(e.category)) e.category = 'normal';
+  e.baseHp = Number.isFinite(e.baseHp) ? Math.max(1, Math.floor(e.baseHp)) : 30;
+  e.weight = Number.isFinite(e.weight) ? Math.max(1, Math.floor(e.weight)) : 1;
+  if(!Array.isArray(e.moveIds)) e.moveIds = [];
+  e.moveIds = e.moveIds.filter(id=> S.cards.some(c=>c.id===id));
+  if(!e.startEffect || typeof e.startEffect!=='object') e.startEffect = {};
+  return e;
+}
+// Only known keys of the right type are taken (numbers stay numbers, switches stay booleans).
+function cleanSettings(obj){
+  const out = {};
+  Object.keys(DEFAULT_SETTINGS).forEach(k=>{
+    const dv = DEFAULT_SETTINGS[k], v = obj[k];
+    if(typeof dv==='boolean' && typeof v==='boolean') out[k] = v;
+    else if(typeof dv==='number' && typeof v==='number' && Number.isFinite(v)) out[k] = Math.max(0, Math.floor(v));
+  });
+  return out;
+}
+
+const DATA_SECTIONS = [
+  {key:'cards', label:'カード', kind:'list', get:()=>S.cards, set:(v)=>{ S.cards = v; saveCards(v); },
+   check:(x)=> x && validSaveId(x.id) && typeof x.name==='string' && x.name.trim() && ['attack','skill','power'].includes(x.type),
+   normalize:normalizeCard},
+  {key:'relics', label:'レリック', kind:'list', get:()=>S.relics, set:(v)=>{ S.relics = v; saveRelics(v); },
+   check:(x)=> x && validSaveId(x.id) && typeof x.name==='string' && x.name.trim(),
+   normalize:normalizeRelic},
+  {key:'customStatuses', label:'カスタム状態', kind:'list', get:()=>S.customStatuses, set:(v)=>{ S.customStatuses = v; saveCustomStatuses(v); },
+   check:(x)=> x && validSaveId(x.id) && typeof x.name==='string' && x.name.trim() && CUSTOM_STATUS_KINDS.some(k=>k.key===x.kind),
+   normalize:normalizeCustomStatus},
+  {key:'enemies', label:'敵', kind:'list', get:()=>S.enemies, set:(v)=>{ S.enemies = v; saveEnemies(v); },
+   check:(x)=> x && validSaveId(x.id) && typeof x.name==='string' && x.name.trim() && ['normal','elite','boss'].includes(x.category||(x.boss?'boss':x.elite?'elite':'normal')),
+   normalize:normalizeEnemy},
+  {key:'settings', label:'ルール設定', kind:'object', get:()=>S.settings, set:(v)=>{ S.settings = v; saveSettings(v); }},
+];
+
+function buildSaveData(keys){
+  const data = {app:SAVE_APP_ID, version:SAVE_FORMAT_VERSION, exportedAt:new Date().toISOString()};
+  DATA_SECTIONS.forEach(sec=>{
+    if(!keys || keys.includes(sec.key)) data[sec.key] = JSON.parse(JSON.stringify(sec.get()));
+  });
+  return data;
+}
+
+// Text -> validated data. Throws an Error with a readable message if anything is wrong.
+function parseSaveText(text){
+  let data;
+  try{ data = JSON.parse(text); }
+  catch(e){ throw new Error('JSONとして読み取れませんでした。ファイルが壊れているか、別の形式のデータです。'); }
+  if(!data || typeof data!=='object' || data.app!==SAVE_APP_ID){
+    throw new Error('このゲームの保存データではありません。');
+  }
+  let v = parseInt(data.version,10);
+  if(isNaN(v) || v<1) throw new Error('バージョン情報が不正です。');
+  if(v>SAVE_FORMAT_VERSION) throw new Error(`より新しい形式（v${v}）のファイルです。ゲーム側を更新してください。`);
+  while(v<SAVE_FORMAT_VERSION){
+    const fn = SAVE_MIGRATIONS[v];
+    if(!fn) throw new Error(`v${v}の変換処理がありません。`);
+    data = fn(data);
+    v = parseInt(data.version,10);
+  }
+  const result = {sections:{}, dups:{}, skipped:0, exportedAt: typeof data.exportedAt==='string' ? data.exportedAt : ''};
+  DATA_SECTIONS.forEach(sec=>{
+    if(!(sec.key in data)) return;
+    const raw = data[sec.key];
+    if(sec.kind==='list'){
+      if(!Array.isArray(raw)) return;
+      const seen = new Set(), items = [];
+      raw.forEach(x=>{
+        x = deepClean(x);
+        if(sec.check(x) && !seen.has(x.id)){ seen.add(x.id); items.push(sec.normalize(x)); }
+        else result.skipped++;
+      });
+      const cur = new Set(sec.get().map(x=>x.id));
+      result.dups[sec.key] = items.filter(x=>cur.has(x.id)).length;
+      result.sections[sec.key] = items;
+    } else if(raw && typeof raw==='object' && !Array.isArray(raw)){
+      result.sections[sec.key] = cleanSettings(deepClean(raw));
+    }
+  });
+  if(Object.keys(result.sections).length===0) throw new Error('読み込めるデータが含まれていません。');
+  return result;
+}
+
+// mode: 'replace' (swap everything) | 'overwrite' (add; same id is overwritten) | 'skip' (add; same id is kept)
+function applySaveData(parsed, mode, keys, makeBackup){
+  if(makeBackup){
+    // Safety net: keep the state from before the import (ignore failures such as a full storage).
+    try{ localStorage.setItem(BACKUP_KEY, JSON.stringify(buildSaveData())); }catch(e){ console.error(e); }
+  }
+  const results = [];
+  DATA_SECTIONS.forEach(sec=>{
+    const incoming = parsed.sections[sec.key];
+    if(incoming===undefined || !keys.includes(sec.key)) return;
+    if(sec.kind==='list'){
+      if(incoming.length===0){ results.push(`${sec.label}: 有効なデータが0件のため変更しませんでした。`); return; }
+      if(mode==='replace'){
+        sec.set(incoming);
+        results.push(`${sec.label}: ${incoming.length}件で置き換えました。`);
+      } else {
+        const cur = sec.get().slice();
+        const idx = new Map(cur.map((x,i)=>[x.id,i]));
+        let added = 0, replaced = 0, skipped = 0;
+        incoming.forEach(x=>{
+          if(idx.has(x.id)){
+            if(mode==='overwrite'){ cur[idx.get(x.id)] = x; replaced++; } else skipped++;
+          } else { cur.push(x); idx.set(x.id, cur.length-1); added++; }
+        });
+        sec.set(cur);
+        results.push(`${sec.label}: 追加${added}件・上書き${replaced}件・そのまま${skipped}件。`);
+      }
+    } else {
+      if(mode==='replace') sec.set(Object.assign({}, DEFAULT_SETTINGS, incoming));
+      else if(mode==='overwrite') sec.set(Object.assign({}, sec.get(), incoming));
+      else { results.push(`${sec.label}: 「そのまま残す」を選んだため変更しませんでした。`); return; }
+      results.push(`${sec.label}: 読み込みました。`);
+    }
+  });
+  return results;
+}
+
+function downloadTextFile(filename, text){
+  const blob = new Blob([text], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+
+const dataScreenState = {msg:'', pending:null};
+
+function renderDataScreen(){
+  const st = dataScreenState;
+  let backupTime = '';
+  try{
+    const b = localStorage.getItem(BACKUP_KEY);
+    if(b){ const o = JSON.parse(b); backupTime = o.exportedAt ? new Date(o.exportedAt).toLocaleString() : '（日時不明）'; }
+  }catch(e){}
+  const pending = st.pending;
+  const hasList = pending && DATA_SECTIONS.some(sec=>sec.kind==='list' && pending.sections[sec.key]!==undefined);
+  const pendingHTML = pending ? `
+    <div style="margin-top:12px; padding:10px; background:var(--bg-void); border:1px solid var(--line); border-radius:4px;">
+      <p style="font-size:13px; color:var(--gold); margin-bottom:6px;">読み込む内容を確認してください${pending.exportedAt?`（書き出し日時: ${escapeHtml(new Date(pending.exportedAt).toLocaleString())}）`:''}</p>
+      ${DATA_SECTIONS.filter(sec=>pending.sections[sec.key]!==undefined).map(sec=>{
+        const detail = sec.kind==='list' ? `${pending.sections[sec.key].length}件・今のデータと同じID: ${pending.dups[sec.key]}件` : 'あり';
+        return `<div class="checkbox-field"><input type="checkbox" id="im-${sec.key}" checked><label for="im-${sec.key}">${sec.label}（${detail}）</label></div>`;
+      }).join('')}
+      ${pending.skipped ? `<p class="hint">形式が不正なため除外: ${pending.skipped}件</p>` : ''}
+      <div class="field" style="margin-top:8px;"><label>読み込み方</label>
+        <select id="im-mode">
+          <option value="overwrite">追加＋同じIDは上書き（マージ）</option>
+          <option value="skip">追加のみ・同じIDはそのまま（マージ）</option>
+          <option value="replace">全置換（選んだ種類のデータを丸ごと入れ替え）</option>
+        </select></div>
+      <div class="modal-actions"><button class="primary" id="btn-import-apply">読み込む</button></div>
+    </div>` : '';
+  app().innerHTML = `
+  <div class="screen">
+    <div class="topbar">
+      <div><p class="eyebrow">DATA</p><h2>データの保存・読み込み</h2></div>
+      <button class="ghost" id="btn-back">← ホームへ</button>
+    </div>
+    ${st.msg ? `<p style="color:var(--gold); margin-bottom:10px;">${escapeHtml(st.msg).replace(/\n/g,'<br>')}</p>` : ''}
+    <div class="settings-card">
+      <h3 style="margin-bottom:6px;">書き出し</h3>
+      <p class="hint">別の端末やPCで遊ぶときは、ここで保存したファイルを、もう一方の端末で読み込んでください。</p>
+      ${DATA_SECTIONS.map(sec=>{
+        const detail = sec.kind==='list' ? `（${sec.get().length}件）` : '';
+        return `<div class="checkbox-field"><input type="checkbox" id="ex-${sec.key}" checked><label for="ex-${sec.key}">${sec.label}${detail}</label></div>`;
+      }).join('')}
+      <div class="modal-actions">
+        <button id="btn-export-text">テキストで表示</button>
+        <button class="primary" id="btn-export-file">ファイルに保存</button>
+      </div>
+      <textarea id="export-text" readonly style="display:none; width:100%; height:130px; margin-top:8px; background:var(--bg-void); color:var(--parchment); border:1px solid var(--line); border-radius:4px; padding:8px; font-family:monospace; font-size:11px;"></textarea>
+      <div id="export-copy-row" style="display:none; margin-top:6px;"><button id="btn-export-copy">コピーする</button></div>
+    </div>
+    <div class="settings-card" style="margin-top:14px;">
+      <h3 style="margin-bottom:6px;">読み込み</h3>
+      <div class="field"><label>保存したファイルを選ぶ</label><input type="file" id="import-file" accept=".json,application/json"></div>
+      <div class="field"><label>またはテキストを貼り付ける</label>
+        <textarea id="import-text" style="width:100%; height:100px; background:var(--bg-void); color:var(--parchment); border:1px solid var(--line); border-radius:4px; padding:8px; font-family:monospace; font-size:11px;"></textarea>
+      </div>
+      <div class="modal-actions"><button id="btn-import-check">内容を確認する</button></div>
+      ${pendingHTML}
+    </div>
+    ${backupTime ? `
+    <div class="settings-card" style="margin-top:14px;">
+      <h3 style="margin-bottom:6px;">元に戻す</h3>
+      <p class="hint">直前の読み込みの前の状態（${escapeHtml(backupTime)}）に戻せます。</p>
+      <div class="modal-actions"><button id="btn-restore">読み込み前の状態に戻す</button></div>
+    </div>` : ''}
+  </div>`;
+
+  const selectedKeys = (prefix)=> DATA_SECTIONS.map(s=>s.key).filter(k=>{ const c = qs(`#${prefix}-${k}`); return c && c.checked; });
+  qs('#btn-back').onclick = ()=>{ st.msg=''; st.pending=null; S.screen='home'; renderHome(); };
+
+  qs('#btn-export-file').onclick = ()=>{
+    const keys = selectedKeys('ex');
+    if(keys.length===0){ st.msg='書き出す項目を選んでください。'; renderDataScreen(); return; }
+    const d = new Date(); const pad = (n)=>String(n).padStart(2,'0');
+    downloadTextFile(`ashbound-codex-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`, JSON.stringify(buildSaveData(keys), null, 1));
+    st.msg = 'ファイルを保存しました。';
+    renderDataScreen();
+  };
+  qs('#btn-export-text').onclick = ()=>{
+    const keys = selectedKeys('ex');
+    if(keys.length===0){ st.msg='書き出す項目を選んでください。'; renderDataScreen(); return; }
+    const ta = qs('#export-text');
+    ta.value = JSON.stringify(buildSaveData(keys));
+    ta.style.display = 'block';
+    qs('#export-copy-row').style.display = 'block';
+  };
+  qs('#btn-export-copy').onclick = async ()=>{
+    const ta = qs('#export-text');
+    let ok = false;
+    try{ await navigator.clipboard.writeText(ta.value); ok = true; }
+    catch(e){ ta.focus(); ta.select(); try{ ok = document.execCommand('copy'); }catch(e2){} }
+    qs('#btn-export-copy').textContent = ok ? 'コピーしました' : '自動コピーに失敗。テキスト欄を選択して手動でコピーしてください';
+  };
+
+  const checkImportText = (text)=>{
+    try{ st.pending = parseSaveText(text); st.msg = ''; }
+    catch(e){ st.pending = null; st.msg = e.message; }
+    renderDataScreen();
+  };
+  qs('#import-file').onchange = (ev)=>{
+    const file = ev.target.files && ev.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=> checkImportText(String(reader.result));
+    reader.onerror = ()=>{ st.msg = 'ファイルを読み込めませんでした。'; renderDataScreen(); };
+    reader.readAsText(file);
+  };
+  qs('#btn-import-check').onclick = ()=>{
+    const text = qs('#import-text').value.trim();
+    if(!text){ st.msg = 'ファイルを選ぶか、テキストを貼り付けてください。'; renderDataScreen(); return; }
+    checkImportText(text);
+  };
+  if(qs('#btn-import-apply')){
+    qs('#btn-import-apply').onclick = ()=>{
+      const keys = selectedKeys('im');
+      if(keys.length===0){ st.msg = '読み込む項目を選んでください。'; renderDataScreen(); return; }
+      const mode = qs('#im-mode').value;
+      if(mode==='replace'){
+        const names = keys.map(k=>DATA_SECTIONS.find(x=>x.key===k)).map(sec=> sec.kind==='list' ? `${sec.label}${sec.get().length}件` : sec.label).join('・');
+        if(!confirm(`今の${names}を、読み込むデータで置き換えます。よろしいですか？\n（読み込み前の状態は「元に戻す」で復元できます）`)) return;
+      }
+      st.msg = applySaveData(st.pending, mode, keys, true).join('\n');
+      st.pending = null;
+      renderDataScreen();
+    };
+  }
+  if(qs('#btn-restore')){
+    qs('#btn-restore').onclick = ()=>{
+      if(!confirm('直前の読み込みの前の状態に戻します。今のデータは上書きされます。よろしいですか？')) return;
+      try{
+        const parsed = parseSaveText(localStorage.getItem(BACKUP_KEY)||'');
+        applySaveData(parsed, 'replace', DATA_SECTIONS.map(s=>s.key), false);
+        localStorage.removeItem(BACKUP_KEY);
+        st.msg = '読み込み前の状態に戻しました。';
+      }catch(e){ st.msg = '元に戻せませんでした: ' + e.message; }
+      renderDataScreen();
+    };
+  }
 }
 
 /* ============================= SETTINGS SCREEN ============================= */
@@ -710,6 +1129,205 @@ const EFFECT_FIELD_DEFS = [
   {key:'hits', label:'発動回数（カード効果をこの回数分繰り返す）', max:10, min:1, default:1, showIf:(v)=>v>1, desc:(v)=>`${v}回発動`},
 ];
 
+/* ============================= CUSTOM STATUSES ============================= */
+
+// A custom status is a user-defined buff/debuff. Its stack count lives on whichever
+// entity (r.player or r.enemy) holds it, in that entity's `customStatus` map, keyed
+// by the status's own id: entity.customStatus = { [statusId]: stackCount }.
+//
+// "kind" decides the one mechanical thing the status does; this mirrors the built-in
+// statuses (weak/vulnerable/strength/dexterity/metallicize/poison/regen/thorns/stun),
+// generalized so any of them can be re-created with custom numbers, name and emoji:
+const CUSTOM_STATUS_KINDS = [
+  {key:'damageDealtPct', label:'与ダメージを％変化させる（弱体のように、マイナス値で軽減）'},
+  {key:'damageTakenPct', label:'被ダメージを％変化させる（脆弱のように、プラス値で増加）'},
+  {key:'damageDealtFlat', label:'与ダメージに固定値を加算する（強化のように）'},
+  {key:'blockGainFlat', label:'ブロック獲得量に固定値を加算する（器用のように）'},
+  {key:'autoBlock', label:'自分のターン開始時にブロックを獲得する（自動ブロックのように）'},
+  {key:'turnStartDamage', label:'自分のターン開始時にダメージを受ける（毒のように）'},
+  {key:'turnStartHeal', label:'自分のターン開始時にHPを回復する（再生のように）'},
+  {key:'reflectDamage', label:'攻撃を受けた時に反射ダメージを与える（棘のように）'},
+  {key:'skipTurn', label:'自分のターンを1回休む（麻痺のように、数値は無視）'},
+];
+
+function customStatusStacks(entity, statusId){
+  return (entity.customStatus && entity.customStatus[statusId]) || 0;
+}
+function setCustomStatusStacks(entity, statusId, val){
+  if(!entity.customStatus) entity.customStatus = {};
+  if(val<=0) delete entity.customStatus[statusId];
+  else entity.customStatus[statusId] = val;
+}
+function addCustomStatusStacks(entity, statusId, delta){
+  setCustomStatusStacks(entity, statusId, customStatusStacks(entity, statusId) + delta);
+}
+// 'fixed': the configured value applies as-is, regardless of stack count (stacks just
+// count down as a duration, like weak/vulnerable). 'perStack': the configured value is
+// a per-stack coefficient, so the total scales with the current stack count (like poison).
+function customStatusMagnitude(status, stacks){
+  return status.magnitudeMode==='perStack' ? status.magnitudeValue*stacks : status.magnitudeValue;
+}
+function customStatusesOn(entity, kind){
+  return (S.customStatuses||[]).filter(st=> st.kind===kind && customStatusStacks(entity, st.id)>0);
+}
+function customDamageDealtBonus(entity){
+  let flat=0, pct=0;
+  customStatusesOn(entity,'damageDealtFlat').forEach(st=> flat += customStatusMagnitude(st, customStatusStacks(entity,st.id)));
+  customStatusesOn(entity,'damageDealtPct').forEach(st=> pct += customStatusMagnitude(st, customStatusStacks(entity,st.id)));
+  return {flat, pct};
+}
+function customDamageTakenPct(entity){
+  let pct=0;
+  customStatusesOn(entity,'damageTakenPct').forEach(st=> pct += customStatusMagnitude(st, customStatusStacks(entity,st.id)));
+  return pct;
+}
+function customBlockGainBonus(entity){
+  let flat=0;
+  customStatusesOn(entity,'blockGainFlat').forEach(st=> flat += customStatusMagnitude(st, customStatusStacks(entity,st.id)));
+  return flat;
+}
+function customReflectDamage(entity){
+  let flat=0;
+  customStatusesOn(entity,'reflectDamage').forEach(st=> flat += customStatusMagnitude(st, customStatusStacks(entity,st.id)));
+  return flat;
+}
+
+// Runs at the start of `entity`'s own turn: autoBlock / turnStartDamage / turnStartHeal /
+// skipTurn fire, then every custom status currently on the entity applies its perTurnDelta
+// (grows or shrinks its own stack count — this is the "ターンごとに増減" option). Returns
+// true if the entity's turn should be skipped entirely.
+function tickCustomStatusesForTurn(entity){
+  let skip = false;
+  (S.customStatuses||[]).forEach(st=>{
+    const stacks = customStatusStacks(entity, st.id);
+    if(stacks<=0) return;
+    if(st.kind==='turnStartDamage'){
+      const amt = Math.max(0, customStatusMagnitude(st, stacks));
+      if(amt>0){ entity.hp = Math.max(0, entity.hp - amt); pushLog(`${st.emoji||''}${st.name}によって${amt}ダメージ。`); }
+    } else if(st.kind==='turnStartHeal'){
+      const amt = Math.max(0, customStatusMagnitude(st, stacks));
+      if(amt>0){ entity.hp = Math.min(entity.maxHp, entity.hp + amt); pushLog(`${st.emoji||''}${st.name}によってHPを${amt}回復した。`); }
+    } else if(st.kind==='autoBlock'){
+      const amt = Math.max(0, customStatusMagnitude(st, stacks));
+      if(amt>0) entity.block += amt;
+    } else if(st.kind==='skipTurn'){
+      skip = true;
+      addCustomStatusStacks(entity, st.id, -1);
+      pushLog(`${st.emoji||''}${st.name}によって行動できない。`);
+    }
+  });
+  (S.customStatuses||[]).forEach(st=>{
+    const stacks = customStatusStacks(entity, st.id);
+    if(stacks>0 && st.perTurnDelta) addCustomStatusStacks(entity, st.id, st.perTurnDelta);
+  });
+  return skip;
+}
+
+// Bridges custom statuses into the same "effect field" vocabulary cards/relics already
+// use (damage, block, strength...) by keying each one as "cs_<statusId>" on the card or
+// relic-effect object. Because the key format matches EFFECT_FIELD_DEFS exactly, every
+// generic loop that already walks EFFECT_FIELD_DEFS (the editor's field rows, the card
+// description, upgradedCardView, relicFieldDefsFor) works for custom statuses for free
+// once it walks allEffectFieldDefs() instead.
+function customStatusFieldDefs(){
+  return (S.customStatuses||[]).map(st=>({
+    key: 'cs_'+st.id,
+    label: `${st.emoji?st.emoji+' ':''}${st.name} 付与`,
+    max: 99,
+    desc: (v)=> `${st.emoji?st.emoji+' ':''}${st.name}+${v}${st.target==='opponent'?'（相手に）':'（自分に）'}`,
+    _statusId: st.id,
+  }));
+}
+function allEffectFieldDefs(){ return EFFECT_FIELD_DEFS.concat(customStatusFieldDefs()); }
+
+/* ===== Enemies using cards as their moves =====
+   An enemy's move pattern is just a list of card ids (cards flagged "usableBy: enemy"
+   or "both" in the card editor). Enemies have no hand/deck, so cardOp, draw, energy,
+   trigger timing, and scaling are not supported here — only the straightforward
+   numeric effects that make sense for a single move: damage, block, buffs/debuffs,
+   heal, pierce/lifesteal, hits (repeat count) and custom statuses. Custom statuses
+   route through the same target ('self'/'opponent') as they do for cards, just with
+   the enemy as the actor instead of the player. */
+function resolveEnemyMoveEffects(r, e, c){
+  const p = r.player;
+  const replays = Math.max(1, c.hits||1);
+  for(let rep=0; rep<replays; rep++){
+    if(e.hp<=0 || p.hp<=0) break;
+    const dmg = Math.max(0, c.damage||0);
+    if(dmg>0){
+      const dealt = applyDamageToPlayer(dmg + e.strength, c.pierce);
+      pushLog(`${e.name}の「${c.name}」！ ${dealt}ダメージ${c.pierce?'（貫通）':''}。`);
+      if(c.lifesteal && dealt>0) e.hp = Math.min(e.maxHp, e.hp + dealt);
+      const reflectTotal = p.thorns + p.permThorns + customReflectDamage(p);
+      if(reflectTotal>0){
+        e.hp = Math.max(0, e.hp - reflectTotal);
+        pushLog(`棘によって${e.name}に${reflectTotal}ダメージ。`);
+      }
+    }
+    const blk = Math.max(0, c.block||0);
+    if(blk>0){
+      const total = blk + customBlockGainBonus(e);
+      e.block += total;
+      pushLog(`${e.name}は防御態勢。ブロック+${total}。`);
+    }
+    const heal = Math.max(0, c.heal||0);
+    if(heal>0) e.hp = Math.min(e.maxHp, e.hp + heal);
+    const strength = Math.max(0, c.strength||0) + Math.max(0, c.permStrength||0);
+    if(strength>0){ e.strength += strength; pushLog(`${e.name}は力を高めた！ 強化+${strength}。`); }
+    const dexterity = Math.max(0, c.dexterity||0) + Math.max(0, c.permDexterity||0);
+    if(dexterity>0) e.dexterity += dexterity;
+    const metallicize = Math.max(0, c.metallicize||0) + Math.max(0, c.permMetallicize||0);
+    if(metallicize>0) e.metallicize = (e.metallicize||0) + metallicize;
+    const thorns = Math.max(0, c.thorns||0) + Math.max(0, c.permThorns||0);
+    if(thorns>0) e.thorns += thorns;
+    const weak = Math.max(0, c.weak||0);
+    if(weak>0){ p.weak += weak; pushLog(`${e.name}の効果で弱体+${weak}。`); }
+    const vulnerable = Math.max(0, c.vulnerable||0);
+    if(vulnerable>0){ p.vulnerable += vulnerable; pushLog(`${e.name}の効果で脆弱+${vulnerable}。`); }
+    const poison = Math.max(0, c.poison||0);
+    if(poison>0){ p.poison += poison; pushLog(`${e.name}の効果で毒+${poison}。`); }
+    customStatusFieldDefs().forEach(def=>{
+      const amt = Math.max(0, c[def.key]||0);
+      if(amt<=0) return;
+      const stDef = (S.customStatuses||[]).find(s=>s.id===def._statusId);
+      if(!stDef) return;
+      const target = stDef.target==='opponent' ? p : e;
+      addCustomStatusStacks(target, stDef.id, amt);
+      pushLog(`${e.name}: ${def.desc(amt)}`);
+    });
+  }
+}
+
+// Fields an enemy can be given "at combat start" (from the enemy editor). Permanent-
+// stacking fields are excluded (a freshly-spawned enemy has no meaningful "permanent");
+// weak/vulnerable/poison mean "applied to the player" and strength/dexterity/metallicize/
+// thorns/heal mean "applied to the enemy itself", matching how those fields already work
+// everywhere else (a card's weak always debuffs the opponent; its strength buffs its user).
+function enemyStartFieldDefs(){
+  const allowed = ['strength','dexterity','metallicize','thorns','weak','vulnerable','poison','heal'];
+  return EFFECT_FIELD_DEFS.filter(d=>allowed.includes(d.key)).concat(customStatusFieldDefs());
+}
+function applyEnemyStartEffects(r, e, effect){
+  const eff = effect||{};
+  const strength = Math.max(0, eff.strength||0); if(strength>0) e.strength += strength;
+  const dexterity = Math.max(0, eff.dexterity||0); if(dexterity>0) e.dexterity += dexterity;
+  const metallicize = Math.max(0, eff.metallicize||0); if(metallicize>0) e.metallicize = (e.metallicize||0) + metallicize;
+  const thorns = Math.max(0, eff.thorns||0); if(thorns>0) e.thorns += thorns;
+  const weak = Math.max(0, eff.weak||0); if(weak>0) r.player.weak += weak;
+  const vulnerable = Math.max(0, eff.vulnerable||0); if(vulnerable>0) r.player.vulnerable += vulnerable;
+  const poison = Math.max(0, eff.poison||0); if(poison>0) r.player.poison += poison;
+  const heal = Math.max(0, eff.heal||0); if(heal>0) e.hp = Math.min(e.maxHp, e.hp + heal);
+  customStatusFieldDefs().forEach(def=>{
+    const amt = Math.max(0, eff[def.key]||0);
+    if(amt<=0) return;
+    const stDef = (S.customStatuses||[]).find(s=>s.id===def._statusId);
+    if(!stDef) return;
+    const target = stDef.target==='opponent' ? r.player : e;
+    addCustomStatusStacks(target, stDef.id, amt);
+    pushLog(`${e.name}: ${def.desc(amt)}`);
+  });
+}
+
 /* ============================= CARD OPERATIONS (advanced) ============================= */
 
 const CARDOP_TYPES = [
@@ -764,6 +1382,7 @@ function collectPileEntries(r, fromPileKey){
 }
 function collectGeneratePool(op){
   return S.cards.filter(c=>{
+    if(c.usableBy==='enemy') return false;
     if(op.filterTag && !(c.tags && c.tags.includes(op.filterTag))) return false;
     if(op.genPool==='exclusiveOnly') return !!c.generatedOnly;
     if(op.genPool==='normal') return !c.generatedOnly;
@@ -1008,7 +1627,7 @@ function applyEffectValues(r, c){
   }
   const blockVal = Math.max(0, (c.block||0) + scaleBonus(c,'block'));
   if(blockVal>0){
-    const total = blockVal + r.player.dexterity + r.player.permDexterity;
+    const total = blockVal + r.player.dexterity + r.player.permDexterity + customBlockGainBonus(r.player);
     r.player.block += total;
     pushLog(`${c.name}: ブロック+${total}。`);
   }
@@ -1054,6 +1673,22 @@ function applyEffectValues(r, c){
   if(regenVal>0){ r.player.regen = (r.player.regen||0) + regenVal; }
   const loseHpVal = Math.max(0, (c.loseHp||0) + scaleBonus(c,'loseHp'));
   if(loseHpVal>0){ r.player.hp = Math.max(0, r.player.hp - loseHpVal); }
+
+  customStatusFieldDefs().forEach(def=>{
+    const amt = Math.max(0, (c[def.key]||0) + scaleBonus(c, def.key));
+    if(amt<=0) return;
+    const st = (S.customStatuses||[]).find(s=>s.id===def._statusId);
+    if(!st) return;
+    const target = st.target==='opponent' ? r.enemy : r.player;
+    addCustomStatusStacks(target, st.id, amt);
+    pushLog(`${c.name}: ${def.desc(amt)}`);
+    // A status's own card-operation (self-deck-only) fires once, right when its stacks
+    // are granted. Restricted at the editor level to synchronous-only cardOp configs
+    // (no "choose" count mode, no play/generatePlay types) so it never needs to pause.
+    if(st.cardOp && st.cardOp.enabled && st.target==='self'){
+      resolveCardOp(r, st.cardOp, ()=>{});
+    }
+  });
 }
 
 // One repetition of a card's effect: its numeric effects plus its card-operation.
@@ -1196,6 +1831,164 @@ function renderEditor(){
 
 /* ============================= RELIC EDITOR SCREEN ============================= */
 
+function renderEnemyEditor(){
+  const groups = [['normal','通常'],['elite','エリート'],['boss','ボス']];
+  let html = `
+  <div class="screen">
+    <div class="topbar">
+      <div><p class="eyebrow">ENEMY EDITOR</p><h2>敵を編集する</h2></div>
+      <button class="ghost" id="btn-back">← ホームへ</button>
+    </div>
+    <p class="hint">行動パターンは、カード編集画面で「使用者」を敵または両方にしたカードから選びます。</p>`;
+  groups.forEach(([cat,label])=>{
+    const list = S.enemies.filter(e=>e.category===cat);
+    html += `<div class="section-label">${label}（${list.length}体）</div><div class="editor-grid">`;
+    list.forEach(en=>{
+      html += `<div class="editor-card-wrap" data-id="${en.id}">
+        <div class="card mini" style="cursor:default;">
+          <div class="banner" style="background:linear-gradient(90deg,#7a4a3a,#3a1e14);"><div class="name">${en.emoji||''} ${en.name}</div></div>
+          <div class="art"></div>
+          <div class="desc">HP${en.baseHp}・重み${en.weight}・行動${en.moveIds.length}種</div>
+        </div>
+        <div class="edit-actions">
+          <button class="edit-enemy-btn">編集</button>
+          <button class="del-enemy-btn">削除</button>
+        </div>
+      </div>`;
+    });
+    html += `<div class="add-card-tile" data-category="${cat}">＋</div></div>`;
+  });
+  html += `</div>`;
+  app().innerHTML = html;
+
+  qs('#btn-back').onclick = ()=>{ S.screen='home'; renderHome(); };
+  qsa('.edit-enemy-btn').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.closest('.editor-card-wrap').dataset.id;
+      openEnemyModal(S.enemies.find(en=>en.id===id), false);
+    };
+  });
+  qsa('.del-enemy-btn').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.closest('.editor-card-wrap').dataset.id;
+      if(S.enemies.length<=1){ alert('敵が1体もいなくなってしまうため削除できません。'); return; }
+      if(confirm('この敵を削除しますか？')){
+        S.enemies = S.enemies.filter(en=>en.id!==id);
+        saveEnemies(S.enemies);
+        renderEnemyEditor();
+      }
+    };
+  });
+  qsa('.add-card-tile').forEach(tile=>{
+    tile.onclick = ()=>{
+      openEnemyModal({ id:newId(), name:'新しい敵', emoji:'👾', category: tile.dataset.category, baseHp:30, weight:1, moveIds:[], startEffect:{} }, true);
+    };
+  });
+}
+
+function openEnemyModal(enemy, isNew){
+  const en = {...enemy, moveIds:[...(enemy.moveIds||[])], startEffect:{...(enemy.startEffect||{})}};
+  const movePool = S.cards.filter(c=> c.usableBy==='enemy' || c.usableBy==='both');
+
+  const overlay = el(`<div class="modal-overlay">
+    <div class="modal-box">
+      <h3>${isNew? '敵を新規作成' : '敵を編集'}</h3>
+      <div class="field"><label>名前</label><input type="text" id="em-name" value="${en.name}"></div>
+      <div class="field"><label>絵文字</label><input type="text" id="em-emoji" value="${en.emoji||''}" maxlength="4"></div>
+      <div class="field"><label>種別</label>
+        <select id="em-category">
+          <option value="normal" ${en.category==='normal'?'selected':''}>通常</option>
+          <option value="elite" ${en.category==='elite'?'selected':''}>エリート</option>
+          <option value="boss" ${en.category==='boss'?'selected':''}>ボス</option>
+        </select>
+      </div>
+      <div class="field"><label>基礎HP（階層が進むと設定の割合で増加）</label><input type="number" id="em-hp" value="${en.baseHp}" min="1" max="999"></div>
+      <div class="field"><label>出現の重み（同じ種別の中での出やすさ）</label><input type="number" id="em-weight" value="${en.weight||1}" min="1" max="20"></div>
+      <div class="section-label">行動パターン（この順で繰り返す）</div>
+      ${movePool.length===0 ? `<p class="hint">「使用者」を敵または両方にしたカードがありません。先にカード編集画面で作成してください。</p>` : ''}
+      <div id="em-move-add" style="display:flex; gap:6px; margin-bottom:8px;">
+        <select id="em-move-pick" style="flex:1;">
+          ${movePool.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}
+        </select>
+        <button id="em-move-append" type="button">追加</button>
+      </div>
+      <div id="em-move-list"></div>
+      <div class="section-label">戦闘開始時の効果</div>
+      ${enemyStartFieldDefs().map(def=>`
+      <div class="field">
+        <label>${def.label}</label>
+        <input type="number" id="em-eff-${def.key}" value="${en.startEffect[def.key]||0}" min="0" max="${def.max||99}">
+      </div>`).join('')}
+      <div class="modal-actions">
+        <button class="ghost" id="em-cancel">キャンセル</button>
+        <button class="primary" id="em-save">保存する</button>
+      </div>
+    </div>
+  </div>`);
+  document.body.appendChild(overlay);
+
+  function renderMoveList(){
+    const box = qs('#em-move-list',overlay);
+    if(en.moveIds.length===0){ box.innerHTML = `<p class="hint">まだ行動がありません。上で選んで「追加」してください。</p>`; return; }
+    box.innerHTML = en.moveIds.map((id,i)=>{
+      const c = cardById(id);
+      return `<div style="display:flex; gap:6px; align-items:center; margin-bottom:4px;" data-idx="${i}">
+        <span style="flex:1; font-size:13px;">${i+1}. ${c?c.name:'（不明なカード）'}</span>
+        <button class="em-move-up" type="button" ${i===0?'disabled':''}>↑</button>
+        <button class="em-move-down" type="button" ${i===en.moveIds.length-1?'disabled':''}>↓</button>
+        <button class="em-move-remove" type="button">削除</button>
+      </div>`;
+    }).join('');
+    qsa('.em-move-up',box).forEach(btn=>btn.onclick=()=>{
+      const i = parseInt(btn.closest('[data-idx]').dataset.idx,10);
+      [en.moveIds[i-1], en.moveIds[i]] = [en.moveIds[i], en.moveIds[i-1]];
+      renderMoveList();
+    });
+    qsa('.em-move-down',box).forEach(btn=>btn.onclick=()=>{
+      const i = parseInt(btn.closest('[data-idx]').dataset.idx,10);
+      [en.moveIds[i+1], en.moveIds[i]] = [en.moveIds[i], en.moveIds[i+1]];
+      renderMoveList();
+    });
+    qsa('.em-move-remove',box).forEach(btn=>btn.onclick=()=>{
+      const i = parseInt(btn.closest('[data-idx]').dataset.idx,10);
+      en.moveIds.splice(i,1);
+      renderMoveList();
+    });
+  }
+  renderMoveList();
+  if(qs('#em-move-append',overlay)){
+    qs('#em-move-append',overlay).onclick = ()=>{
+      const pick = qs('#em-move-pick',overlay);
+      if(!pick.value) return;
+      en.moveIds.push(pick.value);
+      renderMoveList();
+    };
+  }
+
+  qs('#em-cancel',overlay).onclick = ()=> overlay.remove();
+  qs('#em-save',overlay).onclick = ()=>{
+    const updated = {
+      id: en.id,
+      name: qs('#em-name',overlay).value.trim() || '無名の敵',
+      emoji: (qs('#em-emoji',overlay).value||'').trim(),
+      category: qs('#em-category',overlay).value,
+      baseHp: clampInt(qs('#em-hp',overlay).value,1,999,30),
+      weight: clampInt(qs('#em-weight',overlay).value,1,20,1),
+      moveIds: en.moveIds.slice(),
+      startEffect: {},
+    };
+    enemyStartFieldDefs().forEach(def=>{
+      updated.startEffect[def.key] = clampInt(qs(`#em-eff-${def.key}`,overlay).value,0,def.max||99,0);
+    });
+    if(updated.moveIds.length===0) updated.moveIds = ['strike'];
+    if(isNew){ S.enemies.push(updated); }
+    else{ S.enemies = S.enemies.map(x=> x.id===updated.id? updated : x); }
+    saveEnemies(S.enemies);
+    overlay.remove();
+    renderEnemyEditor();
+  };
+}
+
 function renderRelicEditor(){
   const groups = [['common','コモン'],['uncommon','アンコモン'],['rare','レア']];
   let html = `
@@ -1248,6 +2041,222 @@ function renderRelicEditor(){
       openRelicModal({ id:newId(), name:'新しいレリック', rarity: tile.dataset.rarity, timing:'onPickup', triggerTag:'', effect:{} }, true);
     };
   });
+}
+
+function customStatusUsage(statusId){
+  const key = 'cs_'+statusId;
+  const cardIds = S.cards.filter(c=>
+    (c[key]) || (c.scales && c.scales[key]) || (c.upgrades && (c.upgrades[key] || (c.upgrades.scalePP && c.upgrades.scalePP[key])))
+    || (c.cardOp && c.cardOp.enabled && c.cardOp.type==='grantBuff' && c.cardOp.buffField===key)
+  ).map(c=>c.id);
+  const relicIds = S.relics.filter(rel=> rel.effect && rel.effect[key]).map(rel=>rel.id);
+  return {cardIds, relicIds};
+}
+function stripCustomStatusRefs(statusId){
+  const key = 'cs_'+statusId;
+  S.cards.forEach(c=>{
+    delete c[key];
+    if(c.scales) delete c.scales[key];
+    if(c.upgrades){ delete c.upgrades[key]; if(c.upgrades.scalePP) delete c.upgrades.scalePP[key]; }
+    if(c.cardOp && c.cardOp.buffField===key){ c.cardOp.enabled = false; }
+  });
+  saveCards(S.cards);
+  S.relics.forEach(rel=>{ if(rel.effect) delete rel.effect[key]; });
+  saveRelics(S.relics);
+}
+
+function renderStatusEditor(){
+  const list = S.customStatuses||[];
+  let html = `
+  <div class="screen">
+    <div class="topbar">
+      <div><p class="eyebrow">STATUS EDITOR</p><h2>カスタム状態を編集する</h2></div>
+      <button class="ghost" id="btn-back">← ホームへ</button>
+    </div>
+    <p class="hint">カードやレリックの効果一覧に「(絵文字) 名前 付与」という項目として並びます。既存の強化・弱体などの組み込みステータスはここには出ません。</p>
+    <div class="section-label">状態一覧（${list.length}種）</div>
+    <div class="editor-grid">`;
+  list.forEach(st=>{
+    const kindLabel = (CUSTOM_STATUS_KINDS.find(k=>k.key===st.kind)||{}).label || st.kind;
+    html += `<div class="editor-card-wrap" data-id="${st.id}">
+      <div class="card mini" style="cursor:default;">
+        <div class="banner" style="background:linear-gradient(90deg,#6a8a6a,#2e4a2e);"><div class="name">${st.emoji||''} ${st.name}</div></div>
+        <div class="art"></div>
+        <div class="desc">${st.target==='opponent'?'相手':'自分'}が持つ状態。${kindLabel}</div>
+      </div>
+      <div class="edit-actions">
+        <button class="edit-status-btn">編集</button>
+        <button class="del-status-btn">削除</button>
+      </div>
+    </div>`;
+  });
+  html += `<div class="add-card-tile" id="add-status-tile">＋</div></div></div>`;
+  app().innerHTML = html;
+
+  qs('#btn-back').onclick = ()=>{ S.screen='home'; renderHome(); };
+  qsa('.edit-status-btn').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.closest('.editor-card-wrap').dataset.id;
+      openStatusModal(S.customStatuses.find(st=>st.id===id), false);
+    };
+  });
+  qsa('.del-status-btn').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.closest('.editor-card-wrap').dataset.id;
+      const st = S.customStatuses.find(x=>x.id===id);
+      const usage = customStatusUsage(id);
+      const usedCount = usage.cardIds.length + usage.relicIds.length;
+      if(usedCount===0){
+        if(!confirm(`「${st.name}」を削除しますか？`)) return;
+      } else {
+        if(!confirm(`「${st.name}」は カード${usage.cardIds.length}枚・レリック${usage.relicIds.length}個で使用されています。\n参照をすべて削除してから、このステータスを削除しますか？`)) return;
+        stripCustomStatusRefs(id);
+      }
+      S.customStatuses = S.customStatuses.filter(x=>x.id!==id);
+      saveCustomStatuses(S.customStatuses);
+      renderStatusEditor();
+    };
+  });
+  qs('#add-status-tile').onclick = ()=>{
+    openStatusModal({
+      id:newId(), name:'新しい状態', emoji:'✨', target:'self', kind:'damageDealtFlat',
+      magnitudeMode:'fixed', magnitudeValue:1, perTurnDelta:0, cardOp:{enabled:false},
+    }, true);
+  };
+}
+
+// A status's own attached card-operation is restricted to configurations that always
+// resolve synchronously (see the note above where it's fired in applyEffectValues).
+const STATUS_CARDOP_TYPES = CARDOP_TYPES.filter(t=>t.key!=='play' && t.key!=='generatePlay');
+
+function openStatusModal(status, isNew){
+  const st = {...status, cardOp:{...(status.cardOp||{enabled:false})}};
+  const overlay = el(`<div class="modal-overlay">
+    <div class="modal-box">
+      <h3>${isNew? '状態を新規作成' : '状態を編集'}</h3>
+      <div class="field"><label>名前</label><input type="text" id="sm-name" value="${st.name}"></div>
+      <div class="field"><label>絵文字</label><input type="text" id="sm-emoji" value="${st.emoji||''}" maxlength="4"></div>
+      <div class="field"><label>対象（カード・レリックで付与した時、誰が受け取るか）</label>
+        <select id="sm-target">
+          <option value="self" ${st.target==='self'?'selected':''}>自分</option>
+          <option value="opponent" ${st.target==='opponent'?'selected':''}>相手</option>
+        </select>
+      </div>
+      <div class="field"><label>効果の種類</label>
+        <select id="sm-kind">
+          ${CUSTOM_STATUS_KINDS.map(k=>`<option value="${k.key}" ${st.kind===k.key?'selected':''}>${k.label}</option>`).join('')}
+        </select>
+      </div>
+      <div id="sm-magnitude-fields" style="${st.kind==='skipTurn'?'display:none;':''}">
+        <div class="field"><label>効果量の決め方</label>
+          <select id="sm-magmode">
+            <option value="fixed" ${st.magnitudeMode==='fixed'?'selected':''}>固定値</option>
+            <option value="perStack" ${st.magnitudeMode==='perStack'?'selected':''}>スタック数×係数</option>
+          </select>
+        </div>
+        <div class="field"><label>効果量（固定値、または1スタックあたりの係数）</label><input type="number" id="sm-magvalue" value="${st.magnitudeValue!==undefined?st.magnitudeValue:1}" min="-999" max="999"></div>
+      </div>
+      <div class="field"><label>ターンごとの増減（自分のターン開始時。マイナスで減少、プラスで増加、0で変化なし）</label><input type="number" id="sm-perturndelta" value="${st.perTurnDelta||0}" min="-99" max="99"></div>
+      <p class="hint">対象が「自分」の毒・脆弱のような減衰は、ここを-1にすると再現できます。強化・自動ブロックのように戦闘中ずっと残したいなら0のままにします。</p>
+      <div id="sm-cardop-section" style="${st.target==='self'?'':'display:none;'}">
+        <div class="checkbox-field" style="margin-top:8px;"><input type="checkbox" id="sm-op-enabled" ${st.cardOp&&st.cardOp.enabled?'checked':''}><label for="sm-op-enabled">付与された瞬間に、自分のデッキへカード操作も行う</label></div>
+        <div id="sm-op-config" style="${st.cardOp&&st.cardOp.enabled?'':'display:none;'} padding:10px; background:var(--bg-void); border:1px solid var(--line); border-radius:4px;">
+          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">操作内容</div>
+          <select id="sm-op-type" style="margin-bottom:8px; width:100%;">
+            ${STATUS_CARDOP_TYPES.map(t=>`<option value="${t.key}" ${st.cardOp&&st.cardOp.type===t.key?'selected':''}>${t.label}</option>`).join('')}
+          </select>
+          <div id="sm-op-frompile-field" style="${st.cardOp&&GENERATE_TYPES.includes(st.cardOp.type)?'display:none;':''}">
+            <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">対象の山</div>
+            <select id="sm-op-frompile" style="margin-bottom:8px; width:100%;">
+              ${PILE_OPTIONS.map(p=>`<option value="${p.key}" ${st.cardOp&&st.cardOp.fromPile===p.key?'selected':''}>${p.label}</option>`).join('')}
+            </select>
+          </div>
+          <div id="sm-op-genpool-field" style="${st.cardOp&&GENERATE_TYPES.includes(st.cardOp.type)?'':'display:none;'}">
+            <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">生成元プール</div>
+            <select id="sm-op-genpool" style="margin-bottom:8px; width:100%;">
+              ${GENERATE_POOL_OPTIONS.map(p=>`<option value="${p.key}" ${st.cardOp&&st.cardOp.genPool===p.key?'selected':''}>${p.label}</option>`).join('')}
+            </select>
+          </div>
+          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">枚数の決め方（任意選択は使えません）</div>
+          <select id="sm-op-countmode" style="margin-bottom:8px; width:100%;">
+            <option value="fixed" ${(!st.cardOp||st.cardOp.countMode==='fixed')?'selected':''}>固定数</option>
+            <option value="random" ${st.cardOp&&st.cardOp.countMode==='random'?'selected':''}>ランダムな範囲</option>
+            <option value="all" ${st.cardOp&&st.cardOp.countMode==='all'?'selected':''}>対象すべて</option>
+          </select>
+          <div style="display:flex; gap:6px; margin-bottom:8px;">
+            <div style="flex:1;"><div style="font-size:10px; color:var(--parchment-dim);">固定数</div><input type="number" id="sm-op-countfixed" value="${(st.cardOp&&st.cardOp.countFixed)||1}" min="0" max="20" style="width:100%;"></div>
+            <div style="flex:1;"><div style="font-size:10px; color:var(--parchment-dim);">ランダム最小</div><input type="number" id="sm-op-countmin" value="${(st.cardOp&&st.cardOp.countMin)||1}" min="0" max="20" style="width:100%;"></div>
+            <div style="flex:1;"><div style="font-size:10px; color:var(--parchment-dim);">ランダム最大</div><input type="number" id="sm-op-countmax" value="${(st.cardOp&&st.cardOp.countMax)||1}" min="0" max="20" style="width:100%;"></div>
+          </div>
+          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">対象タグ絞り込み（空欄で絞り込みなし）</div>
+          <input type="text" id="sm-op-filtertag" value="${(st.cardOp&&st.cardOp.filterTag)||''}" style="width:100%;">
+          <div id="sm-op-buff-fields" style="${st.cardOp&&st.cardOp.type==='grantBuff'?'':'display:none;'} margin-top:10px;">
+            <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">付与する効果</div>
+            <select id="sm-op-bufffield" style="margin-bottom:8px; width:100%;">
+              ${EFFECT_FIELD_DEFS.map(def=>`<option value="${def.key}" ${st.cardOp&&st.cardOp.buffField===def.key?'selected':''}>${def.label}</option>`).join('')}
+            </select>
+            <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">付与量（マイナスで減少も可）</div>
+            <input type="number" id="sm-op-buffamount" value="${(st.cardOp&&st.cardOp.buffAmount)||0}" min="-99" max="99" style="width:100%;">
+          </div>
+        </div>
+        <p class="hint">対象が「相手」の状態には付けられません（相手にはデッキがないため）。</p>
+      </div>
+      <div class="modal-actions">
+        <button class="ghost" id="sm-cancel">キャンセル</button>
+        <button class="primary" id="sm-save">保存する</button>
+      </div>
+    </div>
+  </div>`);
+  document.body.appendChild(overlay);
+  qs('#sm-cancel',overlay).onclick = ()=> overlay.remove();
+  qs('#sm-kind',overlay).onchange = ()=>{
+    qs('#sm-magnitude-fields',overlay).style.display = qs('#sm-kind',overlay).value==='skipTurn' ? 'none' : 'block';
+  };
+  qs('#sm-target',overlay).onchange = ()=>{
+    qs('#sm-cardop-section',overlay).style.display = qs('#sm-target',overlay).value==='self' ? 'block' : 'none';
+  };
+  qs('#sm-op-enabled',overlay).onchange = ()=>{
+    qs('#sm-op-config',overlay).style.display = qs('#sm-op-enabled',overlay).checked ? 'block' : 'none';
+  };
+  qs('#sm-op-type',overlay).onchange = ()=>{
+    const t = qs('#sm-op-type',overlay).value;
+    const isGen = GENERATE_TYPES.includes(t);
+    qs('#sm-op-frompile-field',overlay).style.display = isGen ? 'none' : 'block';
+    qs('#sm-op-genpool-field',overlay).style.display = isGen ? 'block' : 'none';
+    qs('#sm-op-buff-fields',overlay).style.display = t==='grantBuff' ? 'block' : 'none';
+  };
+  qs('#sm-save',overlay).onclick = ()=>{
+    const opEnabled = qs('#sm-op-enabled',overlay).checked;
+    const updated = {
+      id: st.id,
+      name: qs('#sm-name',overlay).value.trim() || '無名の状態',
+      emoji: (qs('#sm-emoji',overlay).value||'').trim(),
+      target: qs('#sm-target',overlay).value,
+      kind: qs('#sm-kind',overlay).value,
+      magnitudeMode: qs('#sm-magmode',overlay).value,
+      magnitudeValue: clampInt(qs('#sm-magvalue',overlay).value,-999,999,1),
+      perTurnDelta: clampInt(qs('#sm-perturndelta',overlay).value,-99,99,0),
+      cardOp: opEnabled ? {
+        enabled: true,
+        type: qs('#sm-op-type',overlay).value,
+        fromPile: qs('#sm-op-frompile',overlay).value,
+        genPool: qs('#sm-op-genpool',overlay).value,
+        countMode: qs('#sm-op-countmode',overlay).value,
+        countFixed: clampInt(qs('#sm-op-countfixed',overlay).value,0,20,1),
+        countMin: clampInt(qs('#sm-op-countmin',overlay).value,0,20,1),
+        countMax: clampInt(qs('#sm-op-countmax',overlay).value,0,20,1),
+        filterTag: (qs('#sm-op-filtertag',overlay).value||'').trim(),
+        buffField: qs('#sm-op-bufffield',overlay).value,
+        buffAmount: clampInt(qs('#sm-op-buffamount',overlay).value,-99,99,0),
+      } : {enabled:false},
+    };
+    if(updated.target!=='self') updated.cardOp = {enabled:false};
+    if(isNew){ S.customStatuses.push(updated); }
+    else{ S.customStatuses = S.customStatuses.map(x=> x.id===updated.id? updated : x); }
+    saveCustomStatuses(S.customStatuses);
+    overlay.remove();
+    renderStatusEditor();
+  };
 }
 
 function relicEffectFieldsHTML(timing, effect){
@@ -1363,7 +2372,7 @@ function openCardModal(card, isNew){
         </div>
       </div>
       <div class="section-label">効果</div>
-      ${EFFECT_FIELD_DEFS.map(def=>{
+      ${allEffectFieldDefs().map(def=>{
         const sc = c.scales && c.scales[def.key];
         const upg = c.upgrades || {};
         const ppDelta = (upg.scalePP && upg.scalePP[def.key]) || 0;
@@ -1403,6 +2412,13 @@ function openCardModal(card, isNew){
       <div class="checkbox-field"><input type="checkbox" id="m-lifesteal" ${c.lifesteal?'checked':''}><label for="m-lifesteal">与えたダメージ分HPを回復する（吸血）</label></div>
       <div class="checkbox-field"><input type="checkbox" id="m-retain" ${c.retain?'checked':''}><label for="m-retain">ターンをまたいで手札に残る（保持）</label></div>
       <div class="checkbox-field"><input type="checkbox" id="m-generatedonly" ${c.generatedOnly?'checked':''}><label for="m-generatedonly">生成専用カード（初期デッキ・報酬・ショップに通常出現しない）</label></div>
+      <div class="field"><label>使用者（敵にすると、初期デッキ・報酬・ショップ・生成には出ず、敵編集の行動パターンから選べるようになる）</label>
+        <select id="m-usableby">
+          <option value="player" ${(!c.usableBy||c.usableBy==='player')?'selected':''}>プレイヤーのみ</option>
+          <option value="enemy" ${c.usableBy==='enemy'?'selected':''}>敵のみ</option>
+          <option value="both" ${c.usableBy==='both'?'selected':''}>両方</option>
+        </select>
+      </div>
       <div class="section-label">カード操作（発展効果）</div>
       <div class="checkbox-field"><input type="checkbox" id="m-op-enabled" ${c.cardOp&&c.cardOp.enabled?'checked':''}><label for="m-op-enabled">カード操作を有効にする</label></div>
       <div id="op-config" style="${c.cardOp&&c.cardOp.enabled?'':'display:none;'} padding:10px; background:var(--bg-void); border:1px solid var(--line); border-radius:4px; margin-bottom:12px;">
@@ -1506,6 +2522,7 @@ function openCardModal(card, isNew){
       lifesteal: qs('#m-lifesteal',overlay).checked,
       retain: qs('#m-retain',overlay).checked,
       generatedOnly: qs('#m-generatedonly',overlay).checked,
+      usableBy: qs('#m-usableby',overlay).value,
       tags: (qs('#m-tags',overlay).value||'').split(',').map(s=>s.trim()).filter(Boolean),
       scales: {},
       upgrades: { costDelta: clampInt(qs('#m-costdelta',overlay).value,-6,6,0), scalePP: {} },
@@ -1513,7 +2530,7 @@ function openCardModal(card, isNew){
       triggerTag: (qs('#m-triggertag',overlay).value||'').trim(),
       duration: qs('#m-duration',overlay).value,
     };
-    EFFECT_FIELD_DEFS.forEach(def=>{
+    allEffectFieldDefs().forEach(def=>{
       const min = def.min!==undefined ? def.min : 0;
       const dflt = def.default!==undefined ? def.default : 0;
       updated[def.key] = clampInt(qs(`#m-${def.key}`,overlay).value,min,def.max,dflt);
@@ -1561,7 +2578,7 @@ function openCardModal(card, isNew){
 function buildStartingDeck(){
   const deck = [];
   S.cards.forEach(c=>{
-    if(c.generatedOnly) return;
+    if(c.generatedOnly || c.usableBy==='enemy') return;
     for(let i=0;i<(c.startingCount||0);i++) deck.push(c.id);
   });
   if(deck.length===0){ // fallback safety
@@ -1573,7 +2590,7 @@ function buildStartingDeck(){
 // focusTag: cards carrying this tag get a much higher weight. onlyFocus: restrict the pool
 // to tagged cards entirely (when any exist), used to guarantee at least one targeted card.
 function weightedPickCard(excludeIds, focusTag, onlyFocus){
-  let pool = S.cards.filter(c=> c.rarity!=='basic' && !c.generatedOnly && !excludeIds.includes(c.id));
+  let pool = S.cards.filter(c=> c.rarity!=='basic' && !c.generatedOnly && c.usableBy!=='enemy' && !excludeIds.includes(c.id));
   if(focusTag && onlyFocus){
     const tagged = pool.filter(c=>c.tags && c.tags.includes(focusTag));
     if(tagged.length) pool = tagged;
@@ -1647,15 +2664,21 @@ function makeEnemy(floorIndex){
   const s = S.settings;
   const isElite = (floorIndex % s.eliteEvery === 0);
   const isLast = floorIndex === s.floorCount;
-  let pool = ENEMY_TEMPLATES.filter(e => isLast ? e.boss : (isElite ? e.elite && !e.boss : !e.elite));
-  if(pool.length===0) pool = ENEMY_TEMPLATES.filter(e=>!e.elite);
-  const t = pool[Math.floor(Math.random()*pool.length)];
+  const category = isLast ? 'boss' : (isElite ? 'elite' : 'normal');
+  let pool = S.enemies.filter(e => e.category===category);
+  if(pool.length===0) pool = S.enemies.filter(e=>e.category==='normal');
+  if(pool.length===0) pool = S.enemies;
+  const totalWeight = pool.reduce((sum,e)=> sum + (e.weight||1), 0);
+  let x = Math.random()*totalWeight;
+  let t = pool[pool.length-1];
+  for(const e of pool){ x -= (e.weight||1); if(x<=0){ t = e; break; } }
   const scale = 1 + (Math.max(0,floorIndex-1) * (s.enemyHpScalePct/100));
   const hp = Math.round(t.baseHp * scale);
   return {
-    name: t.name, emoji: t.emoji, elite: t.elite||false, boss: t.boss||false,
-    hp, maxHp: hp, block:0, strength:0, weak:0, vulnerable:0, poison:0, stun:0,
-    moves: t.moves, moveIdx: 0,
+    name: t.name, emoji: t.emoji, elite: t.category==='elite', boss: t.category==='boss',
+    hp, maxHp: hp, block:0, strength:0, dexterity:0, weak:0, vulnerable:0, poison:0, stun:0, thorns:0,
+    moveIds: t.moveIds && t.moveIds.length ? t.moveIds : ['strike'], moveIdx: 0,
+    customStatus: {}, startEffect: t.startEffect || {},
   };
 }
 
@@ -1745,9 +2768,11 @@ function beginFloor(){
   r.player.vulnerable = 0;
   r.player.poison = 0;
   r.player.regen = 0;
+  r.player.customStatus = {};
   r.activeTriggers = [];
 
   r.enemy = makeEnemy(r.floor);
+  applyEnemyStartEffects(r, r.enemy, r.enemy.startEffect);
   r.player.block = 0;
   r.log = [];
   pushLog(`${r.enemy.name}が現れた！`);
@@ -1786,6 +2811,8 @@ function startPlayerTurn(first){
   r.player.block = 0;
   const autoBlock = r.player.metallicize + r.player.permMetallicize;
   if(autoBlock>0){ r.player.block += autoBlock; }
+  const customSkip = tickCustomStatusesForTurn(r.player);
+  if(r.player.hp<=0){ onPlayerDefeated(); return; }
   if(!first){
     // discard hand from previous turn, except cards flagged "retain"
     const keep = [];
@@ -1804,13 +2831,22 @@ function startPlayerTurn(first){
   drawCards(S.settings.handSize + (r.player.extraDraw||0));
   fireRelicTiming(r, 'turnStart');
   r.turnPhase='player';
+  if(customSkip){
+    pushLog('行動できないため、ターンをスキップした。');
+    endPlayerTurn();
+  }
 }
 
 function applyDamageToEnemy(raw, pierce){
   const r = S.run; const e = r.enemy;
   let dmg = raw;
+  const dealtBonus = customDamageDealtBonus(r.player);
+  dmg += dealtBonus.flat;
   if(r.player.weak>0) dmg = Math.floor(dmg*0.75);
+  if(dealtBonus.pct) dmg = Math.max(0, Math.floor(dmg*(1+dealtBonus.pct/100)));
   if(e.vulnerable>0) dmg = Math.floor(dmg*1.5);
+  const takenPct = customDamageTakenPct(e);
+  if(takenPct) dmg = Math.max(0, Math.floor(dmg*(1+takenPct/100)));
   let blocked = 0;
   if(!pierce){ blocked = Math.min(e.block, dmg); e.block -= blocked; dmg -= blocked; }
   e.hp = Math.max(0, e.hp - dmg);
@@ -1819,8 +2855,13 @@ function applyDamageToEnemy(raw, pierce){
 function applyDamageToPlayer(raw){
   const r = S.run; const p = r.player;
   let dmg = raw;
+  const dealtBonus = customDamageDealtBonus(r.enemy);
+  dmg += dealtBonus.flat;
   if(r.enemy.weak>0) dmg = Math.floor(dmg*0.75);
+  if(dealtBonus.pct) dmg = Math.max(0, Math.floor(dmg*(1+dealtBonus.pct/100)));
   if(p.vulnerable>0) dmg = Math.floor(dmg*1.5);
+  const takenPct = customDamageTakenPct(p);
+  if(takenPct) dmg = Math.max(0, Math.floor(dmg*(1+takenPct/100)));
   const blocked = Math.min(p.block, dmg);
   p.block -= blocked; dmg -= blocked;
   p.hp = Math.max(0, p.hp - dmg);
@@ -1868,27 +2909,18 @@ function runEnemyTurn(){
     e.poison--;
     if(e.hp<=0){ onEnemyDefeated(); return; }
   }
+  const customSkip = tickCustomStatusesForTurn(e);
+  if(e.hp<=0){ onEnemyDefeated(); return; }
   if(e.stun>0){
     e.stun--;
     pushLog(`${e.name}は麻痺していて行動できない。`);
+  } else if(customSkip){
+    pushLog(`${e.name}は行動できない。`);
   } else {
-    const move = e.moves[e.moveIdx % e.moves.length];
-    if(move.type==='attack'){
-      const dealt = applyDamageToPlayer(move.damage + e.strength);
-      pushLog(`${e.name}の攻撃！ ${dealt}ダメージ。`);
-      const thornsTotal = r.player.thorns + r.player.permThorns;
-      if(thornsTotal>0){
-        e.hp = Math.max(0, e.hp - thornsTotal);
-        pushLog(`棘によって${e.name}に${thornsTotal}ダメージ。`);
-        if(e.hp<=0){ onEnemyDefeated(); return; }
-      }
-    } else if(move.type==='defend'){
-      e.block += move.block;
-      pushLog(`${e.name}は防御態勢。ブロック+${move.block}。`);
-    } else if(move.type==='buff'){
-      e.strength += move.strength;
-      pushLog(`${e.name}は力を高めた！ 強化+${move.strength}。`);
-    }
+    const move = cardById(e.moveIds[e.moveIdx % e.moveIds.length]);
+    if(move) resolveEnemyMoveEffects(r, e, move);
+    if(e.hp<=0){ onEnemyDefeated(); return; }
+    if(r.player.hp<=0){ onPlayerDefeated(); return; }
     e.moveIdx++;
   }
   if(e.weak>0) e.weak--;
@@ -1948,13 +2980,28 @@ function statusChips(entity){
   if(entity.stun) chips.push(`💫 麻痺 ${entity.stun}`);
   if(entity.metallicize) chips.push(`🛡️ 自動 ${entity.metallicize}`);
   if(entity.thorns) chips.push(`🌵 棘 ${entity.thorns}`);
+  if(entity.customStatus){
+    (S.customStatuses||[]).forEach(st=>{
+      const v = entity.customStatus[st.id];
+      if(v) chips.push(`${st.emoji||'❔'} ${st.name} ${v}`);
+    });
+  }
   return chips.map(c=>`<span class="status-chip">${c}</span>`).join('');
 }
 function intentLabel(e){
-  const move = e.moves[e.moveIdx % e.moves.length];
-  if(move.type==='attack') return {cls:'atk', text:`⚔️ 攻撃予告：${move.damage + e.strength}`};
-  if(move.type==='defend') return {cls:'def', text:`🛡️ 防御予告：${move.block}`};
-  return {cls:'buf', text:`✨ 強化予告：+${move.strength}`};
+  const c = cardById(e.moveIds[e.moveIdx % e.moveIds.length]);
+  if(!c) return {cls:'buf', text:'？'};
+  // Priority mirrors what a player most cares about seeing coming: incoming damage
+  // first, then block, then anything else (buffs/debuffs/heal/custom statuses).
+  if(c.damage>0){
+    const hits = Math.max(1, c.hits||1);
+    const per = c.damage + e.strength;
+    return {cls:'atk', text:`⚔️ 攻撃予告：${hits>1?`${per}×${hits}`:per}`};
+  }
+  if(c.block>0) return {cls:'def', text:`🛡️ 防御予告：${c.block + e.dexterity}`};
+  if(c.strength>0 || c.permStrength>0) return {cls:'buf', text:`✨ 強化予告：+${(c.strength||0)+(c.permStrength||0)}`};
+  if(c.heal>0) return {cls:'buf', text:`💚 回復予告：+${c.heal}`};
+  return {cls:'buf', text:`✨ ${c.name}`};
 }
 
 function renderCardChoiceOverlay(r){
@@ -2113,11 +3160,15 @@ const RELIC_META_FIELDS = [
 // those every single combat or every single turn would spiral out of control).
 function relicFieldDefsFor(timing){
   if(timing==='onPickup'){
+    // Custom statuses are excluded from onPickup: with no combat happening, granting
+    // enemy-targeted ones makes no sense, and self-targeted recurring effects picked up
+    // once outside combat would be an odd, hard-to-read one-shot. They're available for
+    // the 4 recurring timings below instead.
     const allowed = ['permStrength','permDexterity','permMetallicize','permThorns','heal'];
     return [...EFFECT_FIELD_DEFS.filter(d=>allowed.includes(d.key)), ...RELIC_META_FIELDS];
   }
   const excluded = ['permStrength','permDexterity','permMetallicize','permThorns'];
-  const defs = EFFECT_FIELD_DEFS.filter(d=>!excluded.includes(d.key));
+  const defs = allEffectFieldDefs().filter(d=>!excluded.includes(d.key));
   return timing==='combatEnd' ? [...defs, RELIC_META_FIELDS.find(d=>d.key==='goldBonus')] : defs;
 }
 
@@ -2213,7 +3264,7 @@ const EVENT_TEMPLATES = [
      get cost(){ return S.settings.eventMerchantCost; },
      apply:(r)=>{
       r.player.gold -= S.settings.eventMerchantCost;
-      const pool = S.cards.filter(c=>(c.rarity==='uncommon'||c.rarity==='rare') && !c.generatedOnly);
+      const pool = S.cards.filter(c=>(c.rarity==='uncommon'||c.rarity==='rare') && !c.generatedOnly && c.usableBy!=='enemy');
       const pick = pool[Math.floor(Math.random()*pool.length)];
       if(pick) r.discard.push(pick.id);
       return pick? `${pick.name}を手に入れた。` : '今日はめぼしい品がなかったようだ。';
@@ -2233,7 +3284,7 @@ const EVENT_TEMPLATES = [
         r[inst.pile].splice(inst.i,1);
         lostName = cardById(inst.cid).name;
       }
-      const pool = S.cards.filter(c=>(c.rarity==='uncommon'||c.rarity==='rare') && !c.generatedOnly);
+      const pool = S.cards.filter(c=>(c.rarity==='uncommon'||c.rarity==='rare') && !c.generatedOnly && c.usableBy!=='enemy');
       const gained = pool[Math.floor(Math.random()*pool.length)];
       if(gained) r.discard.push(gained.id);
       return lostName? `${lostName}が消え、代わりに${gained?gained.name:'何か'}を授かった。` : `${gained?gained.name:'何か'}を授かった。`;
@@ -2500,6 +3551,9 @@ async function boot(){
   if(!S.cards || S.cards.length===0) S.cards = DEFAULT_CARDS;
   S.relics = loadRelics();
   if(!S.relics || S.relics.length===0) S.relics = DEFAULT_RELICS;
+  S.customStatuses = loadCustomStatuses();
+  S.enemies = loadEnemies();
+  if(!S.enemies || S.enemies.length===0) S.enemies = DEFAULT_ENEMIES;
   S.settings = loadSettings();
   S.screen='home';
   renderHome();
