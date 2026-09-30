@@ -437,11 +437,25 @@ function migrateRelic(rel){
   if(rel && !rel.timing) rel.timing = 'onPickup';
   return rel;
 }
-function migrateCustomStatus(st){ return st; } // no format changes yet
+// A status used to have exactly one effect (kind + magnitude, plus an optional card-op).
+// It now has a list of effects; old data is converted on load.
+function migrateCustomStatus(st){
+  if(Array.isArray(st.effects)) return st;
+  const effects = [];
+  if(st.kind && st.kind!=='none' && st.kind!=='cardOp'){
+    effects.push({kind:st.kind, magnitudeMode:st.magnitudeMode, magnitudeValue:st.magnitudeValue});
+  }
+  if(st.cardOp && st.cardOp.enabled){
+    effects.push({kind:'cardOp', magnitudeMode:st.magnitudeMode, magnitudeValue:st.magnitudeValue, op:st.cardOp});
+  }
+  const out = {...st, effects};
+  delete out.kind; delete out.magnitudeMode; delete out.magnitudeValue; delete out.cardOp;
+  return out;
+}
 function loadCustomStatuses(){
   try{
     const value = localStorage.getItem('customStatuses');
-    if(value) return JSON.parse(value).map(migrateCustomStatus);
+    if(value) return JSON.parse(value).map(normalizeCustomStatus);
   }catch(e){ console.error(e); }
   return [];
 }
@@ -779,13 +793,44 @@ function normalizeRelic(r){
   if(typeof r.triggerTag!=='string') r.triggerTag = '';
   return r;
 }
+function defaultStatusOp(){
+  return {enabled:true, type:'moveToDiscard', fromPile:'hand', genPool:'normal', countMode:'fixed',
+    countFixed:1, countMin:1, countMax:1, filterTag:'', buffField:'', buffAmount:0};
+}
+function normalizeStatusOp(o){
+  const d = defaultStatusOp();
+  o = (o && typeof o==='object') ? o : {};
+  const okType = ['moveToHand','moveToDiscard','moveToDraw','moveToExhausted','upgrade','duplicate','grantBuff','generateToHand','generateToDraw'];
+  return {
+    enabled:true,
+    type: okType.includes(o.type) ? o.type : d.type,
+    fromPile: PILE_OPTIONS.some(x=>x.key===o.fromPile) ? o.fromPile : d.fromPile,
+    genPool: GENERATE_POOL_OPTIONS.some(x=>x.key===o.genPool) ? o.genPool : d.genPool,
+    countMode: ['fixed','random','all','choose'].includes(o.countMode) ? o.countMode : d.countMode,
+    countFixed: clampInt(o.countFixed,0,20,1),
+    countMin: clampInt(o.countMin,0,20,1),
+    countMax: clampInt(o.countMax,0,20,1),
+    filterTag: typeof o.filterTag==='string' ? o.filterTag.trim() : '',
+    buffField: typeof o.buffField==='string' ? o.buffField : '',
+    buffAmount: clampInt(o.buffAmount,-99,99,0),
+  };
+}
+function normalizeStatusEffect(x){
+  if(!x || typeof x!=='object') return null;
+  if(x.kind!=='cardOp' && !CUSTOM_STATUS_KINDS.some(k=>k.key===x.kind)) return null;
+  const e = {
+    kind: x.kind,
+    magnitudeMode: x.magnitudeMode==='perStack' ? 'perStack' : 'fixed',
+    magnitudeValue: clampInt(x.magnitudeValue,-999,999,1),
+  };
+  if(x.kind==='cardOp') e.op = normalizeStatusOp(x.op);
+  return e;
+}
 function normalizeCustomStatus(st){
   st = migrateCustomStatus({...st});
   if(st.target!=='opponent') st.target = 'self';
-  if(!['fixed','perStack'].includes(st.magnitudeMode)) st.magnitudeMode = 'fixed';
-  if(!Number.isFinite(st.magnitudeValue)) st.magnitudeValue = 1;
   if(!Number.isFinite(st.perTurnDelta)) st.perTurnDelta = 0;
-  if(!st.cardOp || typeof st.cardOp!=='object') st.cardOp = {enabled:false};
+  st.effects = (Array.isArray(st.effects) ? st.effects : []).map(normalizeStatusEffect).filter(Boolean);
   return st;
 }
 /* ============================= IMAGES ============================= */
@@ -887,7 +932,7 @@ const DATA_SECTIONS = [
    check:(x)=> x && validSaveId(x.id) && typeof x.name==='string' && x.name.trim(),
    normalize:normalizeRelic},
   {key:'customStatuses', label:'カスタム状態', kind:'list', get:()=>S.customStatuses, set:(v)=>{ S.customStatuses = v; saveCustomStatuses(v); },
-   check:(x)=> x && validSaveId(x.id) && typeof x.name==='string' && x.name.trim() && CUSTOM_STATUS_KINDS.some(k=>k.key===x.kind),
+   check:(x)=> x && validSaveId(x.id) && typeof x.name==='string' && x.name.trim() && (Array.isArray(x.effects) || x.kind==='none' || CUSTOM_STATUS_KINDS.some(k=>k.key===x.kind)),
    normalize:normalizeCustomStatus},
   {key:'enemies', label:'敵', kind:'list', get:()=>S.enemies, set:(v)=>{ S.enemies = v; saveEnemies(v); },
    check:(x)=> x && validSaveId(x.id) && typeof x.name==='string' && x.name.trim() && ['normal','elite','boss'].includes(x.category||(x.boss?'boss':x.elite?'elite':'normal')),
@@ -1294,7 +1339,6 @@ const CUSTOM_STATUS_KINDS = [
   {key:'turnStartHeal', label:'自分のターン開始時にHPを回復する（再生のように）'},
   {key:'reflectDamage', label:'攻撃を受けた時に反射ダメージを与える（棘のように）'},
   {key:'skipTurn', label:'自分のターンを1回休む（麻痺のように、数値は無視）'},
-  {key:'none', label:'効果なし（カード操作専用。効果量は操作を行う回数になります）'},
 ];
 
 function customStatusStacks(entity, statusId){
@@ -1314,30 +1358,25 @@ function addCustomStatusStacks(entity, statusId, delta){
 function customStatusMagnitude(status, stacks){
   return status.magnitudeMode==='perStack' ? status.magnitudeValue*stacks : status.magnitudeValue;
 }
-function customStatusesOn(entity, kind){
-  return (S.customStatuses||[]).filter(st=> st.kind===kind && customStatusStacks(entity, st.id)>0);
+// Every effect of the given kind, across all custom statuses the entity currently holds.
+function customEffectsOn(entity, kind){
+  const out = [];
+  (S.customStatuses||[]).forEach(st=>{
+    const stacks = customStatusStacks(entity, st.id);
+    if(stacks<=0) return;
+    (st.effects||[]).forEach(eff=>{ if(eff.kind===kind) out.push({st, eff, stacks}); });
+  });
+  return out;
+}
+function customEffectSum(entity, kind){
+  return customEffectsOn(entity, kind).reduce((sum,x)=> sum + customStatusMagnitude(x.eff, x.stacks), 0);
 }
 function customDamageDealtBonus(entity){
-  let flat=0, pct=0;
-  customStatusesOn(entity,'damageDealtFlat').forEach(st=> flat += customStatusMagnitude(st, customStatusStacks(entity,st.id)));
-  customStatusesOn(entity,'damageDealtPct').forEach(st=> pct += customStatusMagnitude(st, customStatusStacks(entity,st.id)));
-  return {flat, pct};
+  return {flat: customEffectSum(entity,'damageDealtFlat'), pct: customEffectSum(entity,'damageDealtPct')};
 }
-function customDamageTakenPct(entity){
-  let pct=0;
-  customStatusesOn(entity,'damageTakenPct').forEach(st=> pct += customStatusMagnitude(st, customStatusStacks(entity,st.id)));
-  return pct;
-}
-function customBlockGainBonus(entity){
-  let flat=0;
-  customStatusesOn(entity,'blockGainFlat').forEach(st=> flat += customStatusMagnitude(st, customStatusStacks(entity,st.id)));
-  return flat;
-}
-function customReflectDamage(entity){
-  let flat=0;
-  customStatusesOn(entity,'reflectDamage').forEach(st=> flat += customStatusMagnitude(st, customStatusStacks(entity,st.id)));
-  return flat;
-}
+function customDamageTakenPct(entity){ return customEffectSum(entity,'damageTakenPct'); }
+function customBlockGainBonus(entity){ return customEffectSum(entity,'blockGainFlat'); }
+function customReflectDamage(entity){ return customEffectSum(entity,'reflectDamage'); }
 
 // Runs at the start of `entity`'s own turn: autoBlock / turnStartDamage / turnStartHeal /
 // skipTurn fire, then every custom status currently on the entity applies its perTurnDelta
@@ -1348,31 +1387,36 @@ function tickCustomStatusesForTurn(entity){
   (S.customStatuses||[]).forEach(st=>{
     const stacks = customStatusStacks(entity, st.id);
     if(stacks<=0) return;
-    if(st.kind==='turnStartDamage'){
-      const amt = Math.max(0, customStatusMagnitude(st, stacks));
-      if(amt>0){ entity.hp = Math.max(0, entity.hp - amt); pushLog(`${st.emoji||''}${st.name}によって${amt}ダメージ。`); }
-    } else if(st.kind==='turnStartHeal'){
-      const amt = Math.max(0, customStatusMagnitude(st, stacks));
-      if(amt>0){ entity.hp = Math.min(entity.maxHp, entity.hp + amt); pushLog(`${st.emoji||''}${st.name}によってHPを${amt}回復した。`); }
-    } else if(st.kind==='autoBlock'){
-      const amt = Math.max(0, customStatusMagnitude(st, stacks));
-      if(amt>0) entity.block += amt;
-    } else if(st.kind==='skipTurn'){
-      skip = true;
-      addCustomStatusStacks(entity, st.id, -1);
-      pushLog(`${st.emoji||''}${st.name}によって行動できない。`);
-    }
-    // The status's own card-operation acts on the PLAYER's deck, so it only fires while the
-    // player is the one holding the status (whoever applied it — a card, a relic, or an
-    // enemy move). It is queued here and resolved after this turn's hand has been drawn
-    // (see runTurnStartCardOps), so hand operations see the fresh hand. How many times it
-    // fires uses the same fixed/per-stack magnitude as the status's main effect.
-    if(st.cardOp && st.cardOp.enabled && entity===S.run.player){
-      const times = Math.max(0, Math.round(customStatusMagnitude(st, stacks)));
-      for(let i=0;i<times;i++){
-        queueTurnStartOp(S.run, {...st.cardOp}, `${st.emoji||''}${st.name}の効果`);
+    const tag = `${st.emoji||''}${st.name}`;
+    let skipped = false;
+    (st.effects||[]).forEach(eff=>{
+      const mag = customStatusMagnitude(eff, stacks);
+      if(eff.kind==='turnStartDamage'){
+        const amt = Math.max(0, mag);
+        if(amt>0){ entity.hp = Math.max(0, entity.hp - amt); pushLog(`${tag}によって${amt}ダメージ。`); }
+      } else if(eff.kind==='turnStartHeal'){
+        const amt = Math.max(0, mag);
+        if(amt>0){ entity.hp = Math.min(entity.maxHp, entity.hp + amt); pushLog(`${tag}によってHPを${amt}回復した。`); }
+      } else if(eff.kind==='autoBlock'){
+        const amt = Math.max(0, mag);
+        if(amt>0) entity.block += amt;
+      } else if(eff.kind==='skipTurn'){
+        if(!skipped){
+          skipped = true; skip = true;
+          addCustomStatusStacks(entity, st.id, -1);
+          pushLog(`${tag}によって行動できない。`);
+        }
+      } else if(eff.kind==='cardOp' && eff.op){
+        // A card-operation acts on the PLAYER's deck, so it only fires while the player is
+        // the one holding the status (whoever applied it — a card, a relic, or an enemy
+        // move). It is queued and resolved after this turn's hand has been drawn (see
+        // runTurnStartCardOps). How many times it fires uses this effect's magnitude.
+        if(entity===S.run.player){
+          const times = Math.max(0, Math.round(mag));
+          for(let i=0;i<times;i++) queueTurnStartOp(S.run, {...eff.op, enabled:true}, `${tag}の効果`);
+        }
       }
-    }
+    });
   });
   (S.customStatuses||[]).forEach(st=>{
     const stacks = customStatusStacks(entity, st.id);
@@ -2289,7 +2333,7 @@ function renderStatusEditor(){
     <div class="section-label">状態一覧（${list.length}種）</div>
     <div class="editor-grid">`;
   list.forEach(st=>{
-    const kindLabel = (CUSTOM_STATUS_KINDS.find(k=>k.key===st.kind)||{}).label || st.kind;
+    const kindLabel = (st.effects||[]).map(statusEffectShort).join('・') || '効果なし';
     html += `<div class="editor-card-wrap" data-id="${st.id}">
       <div class="card mini" style="cursor:default;">
         <div class="banner" style="background:linear-gradient(90deg,#6a8a6a,#2e4a2e);"><div class="name">${st.emoji||''} ${st.name}</div></div>
@@ -2331,23 +2375,85 @@ function renderStatusEditor(){
   });
   qs('#add-status-tile').onclick = ()=>{
     openStatusModal({
-      id:newId(), name:'新しい状態', emoji:'✨', target:'self', kind:'damageDealtFlat',
-      magnitudeMode:'fixed', magnitudeValue:1, perTurnDelta:0, cardOp:{enabled:false},
+      id:newId(), name:'新しい状態', emoji:'✨', target:'self', perTurnDelta:0,
+      effects:[newStatusEffect('damageDealtFlat')],
     }, true);
   };
 }
 
-// A status's own attached card-operation is restricted to configurations that always
-// resolve synchronously (see the note above where it's fired in applyEffectValues).
+// A status's card-operation is restricted to configurations that resolve at the start of
+// the player's turn (no "play for free" types, which could chain into further plays).
 const STATUS_CARDOP_TYPES = CARDOP_TYPES.filter(t=>t.key!=='play' && t.key!=='generatePlay');
 
+function newStatusEffect(kind){
+  const e = {kind, magnitudeMode:'fixed', magnitudeValue:1};
+  if(kind==='cardOp') e.op = defaultStatusOp();
+  return e;
+}
+function statusEffectLabel(kind){
+  if(kind==='cardOp') return 'カード操作（プレイヤーのデッキを操作する）';
+  return (CUSTOM_STATUS_KINDS.find(k=>k.key===kind)||{}).label || kind;
+}
+function statusEffectShort(eff){
+  if(eff.kind==='cardOp'){
+    const t = (STATUS_CARDOP_TYPES.find(x=>x.key===(eff.op||{}).type)||{}).label || '';
+    return `カード操作（${t}）`;
+  }
+  return statusEffectLabel(eff.kind).replace(/（.*$/,'');
+}
+function statusEffectFormHTML(eff, i){
+  const at = `data-i="${i}"`;
+  const opAt = `data-i="${i}" data-op="1"`;
+  const magHTML = (title)=>`<div class="ev-eff-grid">
+    <div><label>効果量の決め方</label><select ${at} data-f="magnitudeMode">
+      <option value="fixed" ${eff.magnitudeMode==='fixed'?'selected':''}>固定値</option>
+      <option value="perStack" ${eff.magnitudeMode==='perStack'?'selected':''}>スタック数×係数</option></select></div>
+    <div><label>${title}</label><input type="number" ${at} data-f="magnitudeValue" data-num="1" value="${eff.magnitudeValue}" min="-999" max="999"></div>
+  </div>`;
+  let body = '';
+  if(eff.kind==='skipTurn'){
+    body = `<p class="ev-hint">効果量は使われません（スタックを1消費して、自分のターンを1回休みます）。</p>`;
+  } else if(eff.kind!=='cardOp'){
+    body = magHTML('効果量（固定値、または1スタックあたりの係数）');
+  } else {
+    const op = eff.op || defaultStatusOp();
+    const isGen = GENERATE_TYPES.includes(op.type);
+    const sel = (f, list, cur)=>`<select ${opAt} data-f="${f}" ${f==='type'?'data-rerender="1"':''}>${list.map(o=>`<option value="${o.key}" ${o.key===cur?'selected':''}>${escapeHtml(o.label)}</option>`).join('')}</select>`;
+    const num = (f,label,val)=>`<div><label>${label}</label><input type="number" ${opAt} data-f="${f}" data-num="1" value="${val}" min="0" max="20"></div>`;
+    body = `
+      ${magHTML('操作を行う回数（固定値、または1スタックあたりの係数）')}
+      <p class="ev-hint">プレイヤーがこの状態を持っている間（スタック1以上）、自分のターン開始時（手札を引いた後）に発動します。敵が持っている間は発動しません。</p>
+      <div class="field"><label>操作内容</label>${sel('type', STATUS_CARDOP_TYPES, op.type)}</div>
+      ${isGen
+        ? `<div class="field"><label>生成元プール</label>${sel('genPool', GENERATE_POOL_OPTIONS, op.genPool)}</div>`
+        : `<div class="field"><label>対象の山</label>${sel('fromPile', PILE_OPTIONS, op.fromPile)}</div>`}
+      <div class="field"><label>枚数の決め方</label><select ${opAt} data-f="countMode">
+        <option value="fixed" ${op.countMode==='fixed'?'selected':''}>固定数</option>
+        <option value="random" ${op.countMode==='random'?'selected':''}>ランダムな範囲</option>
+        <option value="all" ${op.countMode==='all'?'selected':''}>対象すべて</option>
+        <option value="choose" ${op.countMode==='choose'?'selected':''}>プレイヤーが任意に選ぶ（固定数ぶん、操作のたびに選択画面が出ます）</option></select></div>
+      <div class="ev-eff-grid">${num('countFixed','固定数',op.countFixed)}${num('countMin','ランダム最小',op.countMin)}${num('countMax','ランダム最大',op.countMax)}</div>
+      <div class="field"><label>対象タグ絞り込み（空欄で絞り込みなし）</label><input type="text" ${opAt} data-f="filterTag" value="${escapeHtml(op.filterTag||'')}"></div>
+      ${op.type==='grantBuff' ? `
+        <div class="field"><label>付与する効果</label><select ${opAt} data-f="buffField">
+          ${EFFECT_FIELD_DEFS.map(def=>`<option value="${def.key}" ${op.buffField===def.key?'selected':''}>${escapeHtml(def.label)}</option>`).join('')}</select></div>
+        <div class="field"><label>付与量（マイナスで減少も可）</label><input type="number" ${opAt} data-f="buffAmount" data-num="1" value="${op.buffAmount||0}" min="-99" max="99"></div>` : ''}`;
+  }
+  return `<div class="ev-eff">
+    <div class="ev-eff-head"><span>${escapeHtml(statusEffectLabel(eff.kind))}</span><button type="button" class="ghost" data-del="${i}">削除</button></div>
+    ${body}
+  </div>`;
+}
+
 function openStatusModal(status, isNew){
-  const st = {...status, cardOp:{...(status.cardOp||{enabled:false})}};
+  const st = JSON.parse(JSON.stringify(status));
+  if(!Array.isArray(st.effects)) st.effects = [];
+  const addOptions = CUSTOM_STATUS_KINDS.map(k=>({key:k.key, label:k.label}));
   const overlay = el(`<div class="modal-overlay">
     <div class="modal-box">
       <h3>${isNew? '状態を新規作成' : '状態を編集'}</h3>
-      <div class="field"><label>名前</label><input type="text" id="sm-name" value="${st.name}"></div>
-      <div class="field"><label>絵文字</label><input type="text" id="sm-emoji" value="${st.emoji||''}" maxlength="4"></div>
+      <div class="field"><label>名前</label><input type="text" id="sm-name" value="${escapeHtml(st.name)}"></div>
+      <div class="field"><label>絵文字</label><input type="text" id="sm-emoji" value="${escapeHtml(st.emoji||'')}" maxlength="4"></div>
       <div class="field"><label>対象（カード・レリックで付与した時、誰が受け取るか）</label>
         <select id="sm-target">
           <option value="self" ${st.target==='self'?'selected':''}>自分</option>
@@ -2355,66 +2461,13 @@ function openStatusModal(status, isNew){
         </select>
         <p class="hint">敵の技が付与する場合は立場が逆になります。「相手」＝プレイヤーが受け取る、「自分」＝敵自身が受け取る。敵からプレイヤーに付与したい状態は「相手」にしてください。</p>
       </div>
-      <div class="field"><label>効果の種類</label>
-        <select id="sm-kind">
-          ${CUSTOM_STATUS_KINDS.map(k=>`<option value="${k.key}" ${st.kind===k.key?'selected':''}>${k.label}</option>`).join('')}
-        </select>
-      </div>
-      <div id="sm-magnitude-fields" style="${(st.kind==='skipTurn' && !(st.cardOp&&st.cardOp.enabled))?'display:none;':''}">
-        <div class="field"><label>効果量の決め方</label>
-          <select id="sm-magmode">
-            <option value="fixed" ${st.magnitudeMode==='fixed'?'selected':''}>固定値</option>
-            <option value="perStack" ${st.magnitudeMode==='perStack'?'selected':''}>スタック数×係数</option>
-          </select>
-        </div>
-        <div class="field"><label>効果量（固定値、または1スタックあたりの係数）</label><input type="number" id="sm-magvalue" value="${st.magnitudeValue!==undefined?st.magnitudeValue:1}" min="-999" max="999"></div>
-      </div>
       <div class="field"><label>ターンごとの増減（自分のターン開始時。マイナスで減少、プラスで増加、0で変化なし）</label><input type="number" id="sm-perturndelta" value="${st.perTurnDelta||0}" min="-99" max="99"></div>
       <p class="hint">対象が「自分」の毒・脆弱のような減衰は、ここを-1にすると再現できます。強化・自動ブロックのように戦闘中ずっと残したいなら0のままにします。</p>
-      <div id="sm-cardop-section">
-        <div class="checkbox-field" style="margin-top:8px;"><input type="checkbox" id="sm-op-enabled" ${st.cardOp&&st.cardOp.enabled?'checked':''}><label for="sm-op-enabled">プレイヤーがこの状態を持っている間（スタック1以上）、自分のターン開始時（手札を引いた後）にプレイヤーのデッキへカード操作を行う</label></div>
-        <p class="hint">操作を行う回数は、上の「効果量」（固定値、またはスタック数×係数）がそのまま使われます。効果を出さずに操作だけ行いたい場合は、効果の種類を「効果なし（カード操作専用）」にします。敵が持っている状態では発動しません。</p>
-        <div id="sm-op-config" style="${st.cardOp&&st.cardOp.enabled?'':'display:none;'} padding:10px; background:var(--bg-void); border:1px solid var(--line); border-radius:4px;">
-          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">操作内容</div>
-          <select id="sm-op-type" style="margin-bottom:8px; width:100%;">
-            ${STATUS_CARDOP_TYPES.map(t=>`<option value="${t.key}" ${st.cardOp&&st.cardOp.type===t.key?'selected':''}>${t.label}</option>`).join('')}
-          </select>
-          <div id="sm-op-frompile-field" style="${st.cardOp&&GENERATE_TYPES.includes(st.cardOp.type)?'display:none;':''}">
-            <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">対象の山</div>
-            <select id="sm-op-frompile" style="margin-bottom:8px; width:100%;">
-              ${PILE_OPTIONS.map(p=>`<option value="${p.key}" ${st.cardOp&&st.cardOp.fromPile===p.key?'selected':''}>${p.label}</option>`).join('')}
-            </select>
-          </div>
-          <div id="sm-op-genpool-field" style="${st.cardOp&&GENERATE_TYPES.includes(st.cardOp.type)?'':'display:none;'}">
-            <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">生成元プール</div>
-            <select id="sm-op-genpool" style="margin-bottom:8px; width:100%;">
-              ${GENERATE_POOL_OPTIONS.map(p=>`<option value="${p.key}" ${st.cardOp&&st.cardOp.genPool===p.key?'selected':''}>${p.label}</option>`).join('')}
-            </select>
-          </div>
-          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">枚数の決め方</div>
-          <select id="sm-op-countmode" style="margin-bottom:8px; width:100%;">
-            <option value="fixed" ${(!st.cardOp||st.cardOp.countMode==='fixed')?'selected':''}>固定数</option>
-            <option value="random" ${st.cardOp&&st.cardOp.countMode==='random'?'selected':''}>ランダムな範囲</option>
-            <option value="all" ${st.cardOp&&st.cardOp.countMode==='all'?'selected':''}>対象すべて</option>
-            <option value="choose" ${st.cardOp&&st.cardOp.countMode==='choose'?'selected':''}>プレイヤーが任意に選ぶ（固定数ぶん、操作のたびに選択画面が出ます）</option>
-          </select>
-          <div style="display:flex; gap:6px; margin-bottom:8px;">
-            <div style="flex:1;"><div style="font-size:10px; color:var(--parchment-dim);">固定数</div><input type="number" id="sm-op-countfixed" value="${(st.cardOp&&st.cardOp.countFixed)||1}" min="0" max="20" style="width:100%;"></div>
-            <div style="flex:1;"><div style="font-size:10px; color:var(--parchment-dim);">ランダム最小</div><input type="number" id="sm-op-countmin" value="${(st.cardOp&&st.cardOp.countMin)||1}" min="0" max="20" style="width:100%;"></div>
-            <div style="flex:1;"><div style="font-size:10px; color:var(--parchment-dim);">ランダム最大</div><input type="number" id="sm-op-countmax" value="${(st.cardOp&&st.cardOp.countMax)||1}" min="0" max="20" style="width:100%;"></div>
-          </div>
-          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">対象タグ絞り込み（空欄で絞り込みなし）</div>
-          <input type="text" id="sm-op-filtertag" value="${(st.cardOp&&st.cardOp.filterTag)||''}" style="width:100%;">
-          <div id="sm-op-buff-fields" style="${st.cardOp&&st.cardOp.type==='grantBuff'?'':'display:none;'} margin-top:10px;">
-            <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">付与する効果</div>
-            <select id="sm-op-bufffield" style="margin-bottom:8px; width:100%;">
-              ${EFFECT_FIELD_DEFS.map(def=>`<option value="${def.key}" ${st.cardOp&&st.cardOp.buffField===def.key?'selected':''}>${def.label}</option>`).join('')}
-            </select>
-            <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">付与量（マイナスで減少も可）</div>
-            <input type="number" id="sm-op-buffamount" value="${(st.cardOp&&st.cardOp.buffAmount)||0}" min="-99" max="99" style="width:100%;">
-          </div>
-        </div>
-      </div>
+      <div class="section-label">効果（複数追加できます。すべて同時に働きます）</div>
+      <div id="sm-effects"></div>
+      <div class="ev-add"><select id="sm-addkind">${addOptions.map(o=>`<option value="${o.key}">${escapeHtml(o.label)}</option>`).join('')}</select><button type="button" id="sm-addbtn">＋ 効果を追加</button></div>
+      <div class="ev-add" style="margin-top:6px;"><button type="button" id="sm-addop" style="flex:1;">＋ カード操作を追加（手札を捨てさせる・カードを生成する など）</button></div>
+      <p class="hint">カード操作は、プレイヤーがこの状態を持っている間、自分のターン開始時（手札を引いた後）にプレイヤーのデッキへ行われます。いくつでも追加できます。</p>
       <div class="modal-actions">
         <button class="ghost" id="sm-cancel">キャンセル</button>
         <button class="primary" id="sm-save">保存する</button>
@@ -2422,48 +2475,51 @@ function openStatusModal(status, isNew){
     </div>
   </div>`);
   document.body.appendChild(overlay);
+  const box = qs('#sm-effects', overlay);
+  function renderEffects(){
+    box.innerHTML = st.effects.length
+      ? st.effects.map(statusEffectFormHTML).join('')
+      : `<p class="ev-hint">効果がありません（下のメニューから追加してください）。</p>`;
+  }
+  function sync(t){
+    const f = t.dataset && t.dataset.f;
+    if(!f) return;
+    const eff = st.effects[parseInt(t.dataset.i,10)];
+    if(!eff) return;
+    const obj = t.dataset.op ? eff.op : eff;
+    if(t.dataset.num){ const v = parseInt(t.value,10); obj[f] = isNaN(v) ? 0 : v; }
+    else obj[f] = t.value;
+  }
+  box.addEventListener('input', e=> sync(e.target));
+  box.addEventListener('change', e=>{
+    sync(e.target);
+    if(e.target.dataset && e.target.dataset.rerender) renderEffects();
+  });
+  box.addEventListener('click', e=>{
+    const b = e.target.closest('[data-del]');
+    if(!b) return;
+    st.effects.splice(parseInt(b.dataset.del,10),1);
+    renderEffects();
+  });
+  qs('#sm-addbtn',overlay).onclick = ()=>{
+    st.effects.push(newStatusEffect(qs('#sm-addkind',overlay).value));
+    renderEffects();
+  };
+  qs('#sm-addop',overlay).onclick = ()=>{
+    st.effects.push(newStatusEffect('cardOp'));
+    renderEffects();
+  };
+  renderEffects();
   qs('#sm-cancel',overlay).onclick = ()=> overlay.remove();
-  const refreshMagVisible = ()=>{
-    const needed = qs('#sm-kind',overlay).value!=='skipTurn' || qs('#sm-op-enabled',overlay).checked;
-    qs('#sm-magnitude-fields',overlay).style.display = needed ? 'block' : 'none';
-  };
-  qs('#sm-kind',overlay).onchange = refreshMagVisible;
-  qs('#sm-op-enabled',overlay).onchange = ()=>{
-    qs('#sm-op-config',overlay).style.display = qs('#sm-op-enabled',overlay).checked ? 'block' : 'none';
-    refreshMagVisible();
-  };
-  qs('#sm-op-type',overlay).onchange = ()=>{
-    const t = qs('#sm-op-type',overlay).value;
-    const isGen = GENERATE_TYPES.includes(t);
-    qs('#sm-op-frompile-field',overlay).style.display = isGen ? 'none' : 'block';
-    qs('#sm-op-genpool-field',overlay).style.display = isGen ? 'block' : 'none';
-    qs('#sm-op-buff-fields',overlay).style.display = t==='grantBuff' ? 'block' : 'none';
-  };
   qs('#sm-save',overlay).onclick = ()=>{
-    const opEnabled = qs('#sm-op-enabled',overlay).checked;
-    const updated = {
+    const updated = normalizeCustomStatus({
       id: st.id,
       name: qs('#sm-name',overlay).value.trim() || '無名の状態',
       emoji: (qs('#sm-emoji',overlay).value||'').trim(),
       target: qs('#sm-target',overlay).value,
-      kind: qs('#sm-kind',overlay).value,
-      magnitudeMode: qs('#sm-magmode',overlay).value,
-      magnitudeValue: clampInt(qs('#sm-magvalue',overlay).value,-999,999,1),
       perTurnDelta: clampInt(qs('#sm-perturndelta',overlay).value,-99,99,0),
-      cardOp: opEnabled ? {
-        enabled: true,
-        type: qs('#sm-op-type',overlay).value,
-        fromPile: qs('#sm-op-frompile',overlay).value,
-        genPool: qs('#sm-op-genpool',overlay).value,
-        countMode: qs('#sm-op-countmode',overlay).value,
-        countFixed: clampInt(qs('#sm-op-countfixed',overlay).value,0,20,1),
-        countMin: clampInt(qs('#sm-op-countmin',overlay).value,0,20,1),
-        countMax: clampInt(qs('#sm-op-countmax',overlay).value,0,20,1),
-        filterTag: (qs('#sm-op-filtertag',overlay).value||'').trim(),
-        buffField: qs('#sm-op-bufffield',overlay).value,
-        buffAmount: clampInt(qs('#sm-op-buffamount',overlay).value,-99,99,0),
-      } : {enabled:false},
-    };
+      effects: st.effects,
+    });
     if(isNew){ S.customStatuses.push(updated); }
     else{ S.customStatuses = S.customStatuses.map(x=> x.id===updated.id? updated : x); }
     saveCustomStatuses(S.customStatuses);
