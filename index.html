@@ -786,7 +786,6 @@ function normalizeCustomStatus(st){
   if(!Number.isFinite(st.magnitudeValue)) st.magnitudeValue = 1;
   if(!Number.isFinite(st.perTurnDelta)) st.perTurnDelta = 0;
   if(!st.cardOp || typeof st.cardOp!=='object') st.cardOp = {enabled:false};
-  if(st.target!=='self') st.cardOp = {enabled:false};
   return st;
 }
 /* ============================= IMAGES ============================= */
@@ -1295,6 +1294,7 @@ const CUSTOM_STATUS_KINDS = [
   {key:'turnStartHeal', label:'自分のターン開始時にHPを回復する（再生のように）'},
   {key:'reflectDamage', label:'攻撃を受けた時に反射ダメージを与える（棘のように）'},
   {key:'skipTurn', label:'自分のターンを1回休む（麻痺のように、数値は無視）'},
+  {key:'none', label:'効果なし（カード操作専用。効果量は操作を行う回数になります）'},
 ];
 
 function customStatusStacks(entity, statusId){
@@ -1362,13 +1362,16 @@ function tickCustomStatusesForTurn(entity){
       addCustomStatusStacks(entity, st.id, -1);
       pushLog(`${st.emoji||''}${st.name}によって行動できない。`);
     }
-    // The status's own card-operation (self-deck-only) fires here too, at the holder's
-    // own turn start, as long as it still has at least 1 stack. How many times it fires
-    // uses the same fixed/per-stack magnitude as the status's main effect. Only the
-    // player has a deck to operate on, so this is a no-op for an enemy holder.
-    if(st.cardOp && st.cardOp.enabled && st.target==='self' && entity===S.run.player){
+    // The status's own card-operation acts on the PLAYER's deck, so it only fires while the
+    // player is the one holding the status (whoever applied it — a card, a relic, or an
+    // enemy move). It is queued here and resolved after this turn's hand has been drawn
+    // (see runTurnStartCardOps), so hand operations see the fresh hand. How many times it
+    // fires uses the same fixed/per-stack magnitude as the status's main effect.
+    if(st.cardOp && st.cardOp.enabled && entity===S.run.player){
       const times = Math.max(0, Math.round(customStatusMagnitude(st, stacks)));
-      for(let i=0;i<times;i++){ resolveCardOp(S.run, st.cardOp, ()=>{}); }
+      for(let i=0;i<times;i++){
+        queueTurnStartOp(S.run, {...st.cardOp}, `${st.emoji||''}${st.name}の効果`);
+      }
     }
   });
   (S.customStatuses||[]).forEach(st=>{
@@ -1376,6 +1379,56 @@ function tickCustomStatusesForTurn(entity){
     if(stacks>0 && st.perTurnDelta) addCustomStatusStacks(entity, st.id, st.perTurnDelta);
   });
   return skip;
+}
+
+// ---- Card operations that resolve at the start of the player's turn, after the draw ----
+// Sources: statuses the player holds, and enemy moves that carry a card-operation.
+// Enemies can only use the disruptive operations below; the rest (upgrade, duplicate,
+// free-play, move-to-hand) would help the player.
+const ENEMY_CARDOP_TYPES = ['moveToDiscard','moveToExhausted','moveToDraw','generateToHand','generateToDraw','grantBuff'];
+function opChooseVerb(op){
+  return ({moveToDiscard:'捨てる', moveToExhausted:'消滅させる', moveToDraw:'山札に戻す', moveToHand:'手札に移す',
+    upgrade:'強化する', duplicate:'複製する', grantBuff:'効果を付与する', generateToHand:'生成する', generateToDraw:'生成する'})[op.type] || '選ぶ';
+}
+function enemyOpText(op){
+  const lo = Math.min(op.countMin!==undefined?op.countMin:1, op.countMax!==undefined?op.countMax:1);
+  const hi = Math.max(op.countMin!==undefined?op.countMin:1, op.countMax!==undefined?op.countMax:1);
+  const n = op.countMode==='all' ? 'すべて'
+    : op.countMode==='random' ? `${lo}〜${hi}枚`
+    : `${op.countFixed!==undefined?op.countFixed:1}枚`;
+  const tag = op.filterTag ? `[${op.filterTag}]の` : '';
+  const pile = (PILE_OPTIONS.find(x=>x.key===op.fromPile)||{}).label || '手札';
+  const pick = op.countMode==='choose' ? '（プレイヤーが選ぶ）' : '';
+  const perm = op.permanent ? '（永続）' : '';
+  let body;
+  if(op.type==='moveToDiscard') body = `${pile}の${tag}カード${n}を捨てさせる`;
+  else if(op.type==='moveToExhausted') body = `${pile}の${tag}カード${n}を消滅させる`;
+  else if(op.type==='moveToDraw') body = `${pile}の${tag}カード${n}を山札に戻す`;
+  else if(op.type==='generateToHand') body = `カード${n}を手札に加える`;
+  else if(op.type==='generateToDraw') body = `カード${n}を山札に加える`;
+  else if(op.type==='grantBuff'){
+    const def = EFFECT_FIELD_DEFS.find(d=>d.key===op.buffField);
+    const name = def ? def.label.replace(/（.*$/,'') : (op.buffField||'');
+    const amt = op.buffAmount||0;
+    body = `${pile}の${tag}カード${n}の${name}${amt>=0?'+':''}${amt}`;
+  } else body = '';
+  return body + pick + perm;
+}
+function queueTurnStartOp(r, op, label){
+  if(!r.pendingTurnStartOps) r.pendingTurnStartOps = [];
+  const o = {...op, prompt: `${label}：${opChooseVerb(op)}カードを選んでください`};
+  r.pendingTurnStartOps.push({op:o, label});
+}
+function runTurnStartCardOps(r, done){
+  const list = r.pendingTurnStartOps || [];
+  r.pendingTurnStartOps = [];
+  let i = 0;
+  (function next(){
+    if(i>=list.length || r.enemy.hp<=0 || r.player.hp<=0){ done(); return; }
+    const item = list[i++];
+    pushLog(item.op.fromEnemy ? item.label : `${item.label}が発動。`);
+    resolveCardOp(r, item.op, next);
+  })();
 }
 
 // Bridges custom statuses into the same "effect field" vocabulary cards/relics already
@@ -1744,6 +1797,7 @@ function resolveCardOp(r, op, done){
       candidates: entries,
       need,
       selectedIdx: [],
+      prompt: op.prompt || '',
       onConfirm: (chosen)=>{ finish(chosen); },
     };
     renderBattle();
@@ -2299,6 +2353,7 @@ function openStatusModal(status, isNew){
           <option value="self" ${st.target==='self'?'selected':''}>自分</option>
           <option value="opponent" ${st.target==='opponent'?'selected':''}>相手</option>
         </select>
+        <p class="hint">敵の技が付与する場合は立場が逆になります。「相手」＝プレイヤーが受け取る、「自分」＝敵自身が受け取る。敵からプレイヤーに付与したい状態は「相手」にしてください。</p>
       </div>
       <div class="field"><label>効果の種類</label>
         <select id="sm-kind">
@@ -2316,8 +2371,9 @@ function openStatusModal(status, isNew){
       </div>
       <div class="field"><label>ターンごとの増減（自分のターン開始時。マイナスで減少、プラスで増加、0で変化なし）</label><input type="number" id="sm-perturndelta" value="${st.perTurnDelta||0}" min="-99" max="99"></div>
       <p class="hint">対象が「自分」の毒・脆弱のような減衰は、ここを-1にすると再現できます。強化・自動ブロックのように戦闘中ずっと残したいなら0のままにします。</p>
-      <div id="sm-cardop-section" style="${st.target==='self'?'':'display:none;'}">
-        <div class="checkbox-field" style="margin-top:8px;"><input type="checkbox" id="sm-op-enabled" ${st.cardOp&&st.cardOp.enabled?'checked':''}><label for="sm-op-enabled">自分のターン開始時（スタックが1以上の間）、自分のデッキへカード操作を行う</label></div>\n        <p class="hint">操作を行う回数は、上の「効果量」（固定値、またはスタック数×係数）がそのまま使われます。</p>
+      <div id="sm-cardop-section">
+        <div class="checkbox-field" style="margin-top:8px;"><input type="checkbox" id="sm-op-enabled" ${st.cardOp&&st.cardOp.enabled?'checked':''}><label for="sm-op-enabled">プレイヤーがこの状態を持っている間（スタック1以上）、自分のターン開始時（手札を引いた後）にプレイヤーのデッキへカード操作を行う</label></div>
+        <p class="hint">操作を行う回数は、上の「効果量」（固定値、またはスタック数×係数）がそのまま使われます。効果を出さずに操作だけ行いたい場合は、効果の種類を「効果なし（カード操作専用）」にします。敵が持っている状態では発動しません。</p>
         <div id="sm-op-config" style="${st.cardOp&&st.cardOp.enabled?'':'display:none;'} padding:10px; background:var(--bg-void); border:1px solid var(--line); border-radius:4px;">
           <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">操作内容</div>
           <select id="sm-op-type" style="margin-bottom:8px; width:100%;">
@@ -2335,11 +2391,12 @@ function openStatusModal(status, isNew){
               ${GENERATE_POOL_OPTIONS.map(p=>`<option value="${p.key}" ${st.cardOp&&st.cardOp.genPool===p.key?'selected':''}>${p.label}</option>`).join('')}
             </select>
           </div>
-          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">枚数の決め方（任意選択は使えません）</div>
+          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">枚数の決め方</div>
           <select id="sm-op-countmode" style="margin-bottom:8px; width:100%;">
             <option value="fixed" ${(!st.cardOp||st.cardOp.countMode==='fixed')?'selected':''}>固定数</option>
             <option value="random" ${st.cardOp&&st.cardOp.countMode==='random'?'selected':''}>ランダムな範囲</option>
             <option value="all" ${st.cardOp&&st.cardOp.countMode==='all'?'selected':''}>対象すべて</option>
+            <option value="choose" ${st.cardOp&&st.cardOp.countMode==='choose'?'selected':''}>プレイヤーが任意に選ぶ（固定数ぶん、操作のたびに選択画面が出ます）</option>
           </select>
           <div style="display:flex; gap:6px; margin-bottom:8px;">
             <div style="flex:1;"><div style="font-size:10px; color:var(--parchment-dim);">固定数</div><input type="number" id="sm-op-countfixed" value="${(st.cardOp&&st.cardOp.countFixed)||1}" min="0" max="20" style="width:100%;"></div>
@@ -2357,7 +2414,6 @@ function openStatusModal(status, isNew){
             <input type="number" id="sm-op-buffamount" value="${(st.cardOp&&st.cardOp.buffAmount)||0}" min="-99" max="99" style="width:100%;">
           </div>
         </div>
-        <p class="hint">対象が「相手」の状態には付けられません（相手にはデッキがないため）。</p>
       </div>
       <div class="modal-actions">
         <button class="ghost" id="sm-cancel">キャンセル</button>
@@ -2372,9 +2428,6 @@ function openStatusModal(status, isNew){
     qs('#sm-magnitude-fields',overlay).style.display = needed ? 'block' : 'none';
   };
   qs('#sm-kind',overlay).onchange = refreshMagVisible;
-  qs('#sm-target',overlay).onchange = ()=>{
-    qs('#sm-cardop-section',overlay).style.display = qs('#sm-target',overlay).value==='self' ? 'block' : 'none';
-  };
   qs('#sm-op-enabled',overlay).onchange = ()=>{
     qs('#sm-op-config',overlay).style.display = qs('#sm-op-enabled',overlay).checked ? 'block' : 'none';
     refreshMagVisible();
@@ -2411,7 +2464,6 @@ function openStatusModal(status, isNew){
         buffAmount: clampInt(qs('#sm-op-buffamount',overlay).value,-99,99,0),
       } : {enabled:false},
     };
-    if(updated.target!=='self') updated.cardOp = {enabled:false};
     if(isNew){ S.customStatuses.push(updated); }
     else{ S.customStatuses = S.customStatuses.map(x=> x.id===updated.id? updated : x); }
     saveCustomStatuses(S.customStatuses);
@@ -2451,6 +2503,7 @@ function openRelicModal(relic, isNew){
         <div class="field"><label>発動条件（このタグのカードを使うたび。空欄でどのカードでも）</label><input type="text" id="rm-triggertag" value="${rel.triggerTag||''}"></div>
       </div>
       <div class="section-label" id="rm-effect-label">${timing==='onPickup' ? '効果（入手時に一度だけ適用）' : '効果（このタイミングになるたび発動）'}</div>
+      <p class="hint" id="rm-hint" style="margin-bottom:8px;${relicTimingHint(timing)?'':'display:none;'}">${relicTimingHint(timing)}</p>
       <div id="rm-effect-fields">${relicEffectFieldsHTML(timing, rel.effect)}</div>
       <div class="modal-actions">
         <button class="ghost" id="rm-cancel">キャンセル</button>
@@ -2465,6 +2518,9 @@ function openRelicModal(relic, isNew){
     qs('#rm-tag-field',overlay).style.display = t==='onTagCardUsed' ? 'block' : 'none';
     qs('#rm-effect-label',overlay).textContent = t==='onPickup' ? '効果（入手時に一度だけ適用）' : '効果（このタイミングになるたび発動）';
     qs('#rm-effect-fields',overlay).innerHTML = relicEffectFieldsHTML(t, rel.effect);
+    const hint = qs('#rm-hint',overlay);
+    hint.textContent = relicTimingHint(t);
+    hint.style.display = relicTimingHint(t) ? '' : 'none';
   };
   qs('#rm-save',overlay).onclick = ()=>{
     const t = qs('#rm-timing',overlay).value;
@@ -2591,6 +2647,7 @@ function openCardModal(card, isNew){
       </div>
       <div class="section-label">カード操作（発展効果）</div>
       <div class="checkbox-field"><input type="checkbox" id="m-op-enabled" ${c.cardOp&&c.cardOp.enabled?'checked':''}><label for="m-op-enabled">カード操作を有効にする</label></div>
+      <p class="hint" style="margin-bottom:8px;">「使える人」が敵／両方のカードを敵が使った場合、カード操作はプレイヤーのデッキへの妨害だけが有効です（捨て札に移動・山札に加える・消滅・カード生成（手札／山札）・効果付与（マイナス値で弱体化））。相手のターン開始時、手札を引いた後に発動し、予告にも表示されます。それ以外の操作は敵が使うと無視されます。</p>
       <div id="op-config" style="${c.cardOp&&c.cardOp.enabled?'':'display:none;'} padding:10px; background:var(--bg-void); border:1px solid var(--line); border-radius:4px; margin-bottom:12px;">
         <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">操作内容</div>
         <select id="m-op-type" style="margin-bottom:8px; width:100%;">
@@ -2971,6 +3028,7 @@ function beginFloor(){
   r.player.regen = 0;
   r.player.customStatus = {};
   r.activeTriggers = [];
+  r.pendingTurnStartOps = [];
 
   r.enemy = makeEnemy(r.floor);
   applyEnemyStartEffects(r, r.enemy, r.enemy.startEffect);
@@ -3058,12 +3116,23 @@ function startPlayerTurn(first){
   drawCards(S.settings.handSize + (r.player.extraDraw||0));
   if(r.enemy.hp<=0){ onEnemyDefeated(); return; }
   if(r.player.hp<=0){ onPlayerDefeated(); return; }
-  fireRelicTiming(r, 'turnStart');
-  r.turnPhase='player';
-  if(customSkip){
-    pushLog('行動できないため、ターンをスキップした。');
-    endPlayerTurn();
-  }
+  // Card operations queued by statuses / enemy moves resolve now that the hand is drawn.
+  // A "choose" operation pauses here until the player picks; the rest of the turn start
+  // then continues from the callback (and re-renders, since the caller already has).
+  let sync = true;
+  runTurnStartCardOps(r, ()=>{
+    if(r.enemy.hp<=0){ onEnemyDefeated(); return; }
+    if(r.player.hp<=0){ onPlayerDefeated(); return; }
+    fireRelicTiming(r, 'turnStart');
+    r.turnPhase='player';
+    if(customSkip){
+      pushLog('行動できないため、ターンをスキップした。');
+      endPlayerTurn();
+    } else if(!sync){
+      renderBattle();
+    }
+  });
+  sync = false;
 }
 
 function applyDamageToEnemy(raw, pierce){
@@ -3148,6 +3217,13 @@ function runEnemyTurn(){
   } else {
     const move = cardById(e.nextMoveId);
     if(move) resolveEnemyMoveEffects(r, e, move);
+    if(move && move.cardOp && move.cardOp.enabled && ENEMY_CARDOP_TYPES.includes(move.cardOp.type) && r.player.hp>0){
+      // Resolved at the start of the player's next turn, once the new hand is drawn.
+      const op = {...move.cardOp, fromEnemy:true};
+      if(GENERATE_TYPES.includes(op.type) && op.countMode==='choose') op.countMode = 'fixed'; // the player must not pick what gets generated
+      queueTurnStartOp(r, op, `${e.name}の「${move.name}」`);
+      r.pendingTurnStartOps[r.pendingTurnStartOps.length-1].label = `${e.name}の「${move.name}」: ${enemyOpText(op)}`;
+    }
     if(e.hp<=0){ onEnemyDefeated(); return; }
     if(r.player.hp<=0){ onPlayerDefeated(); return; }
     e.nextMoveId = rollEnemyMove(e);
@@ -3249,6 +3325,10 @@ function intentLabel(e){
       if(st) parts.push(`${st.emoji||''}${st.name}${amt}`);
     }
   });
+  if(c.cardOp && c.cardOp.enabled && ENEMY_CARDOP_TYPES.includes(c.cardOp.type)){
+    const t = enemyOpText(c.cardOp);
+    if(t) parts.push(t);
+  }
   const cls = c.damage>0 ? 'atk' : (c.block>0 ? 'def' : 'buf');
   const base = c.baseId ? c.name : c.name;
   return {cls, text:`予告: ${cardIcon(c)}${escapeHtml(base)}${parts.length?' '+parts.join('・'):''}`};
@@ -3261,6 +3341,7 @@ function renderCardChoiceOverlay(r){
   <div class="screen center-screen">
     <p class="eyebrow">CHOICE</p>
     <h2>カードを選択（${selected.length} / ${pc.need}）</h2>
+    ${pc.prompt ? `<p style="color:var(--parchment-dim); margin:6px 0 10px;">${escapeHtml(pc.prompt)}</p>` : ''}
     <div class="reward-row" id="choice-row">
       ${pc.candidates.map((e,i)=>{
         const c = cardById(e.rawId);
@@ -3400,7 +3481,7 @@ const RELIC_META_FIELDS = [
   {key:'extraEnergy', label:'毎ターンのエネルギー+（永続）', max:9, desc:(v)=>`毎ターンのエネルギー+${v}`},
   {key:'extraDraw', label:'毎ターンのドロー+（永続）', max:9, desc:(v)=>`毎ターンのドロー+${v}`},
   {key:'extraRewardChoices', label:'カード報酬の選択肢+（永続）', max:5, desc:(v)=>`カード報酬の選択肢+${v}`},
-  {key:'rerollTokens', label:'リロールトークン+（入手時に獲得）', max:20, desc:(v)=>`リロールトークン+${v}`},
+  {key:'rerollTokens', label:'リロールトークン+', max:20, desc:(v)=>`リロールトークン+${v}`},
 ];
 // Which effect fields make sense for a given relic timing. onPickup fires once, outside
 // any particular combat, and only ever affects the player themself or their deck — never
@@ -3413,13 +3494,40 @@ function relicFieldDefsFor(timing){
     // Custom statuses are excluded from onPickup: with no combat happening, granting
     // enemy-targeted ones makes no sense, and self-targeted recurring effects picked up
     // once outside combat would be an odd, hard-to-read one-shot. They're available for
-    // the 4 recurring timings below instead.
+    // the recurring timings below instead.
     const allowed = ['permStrength','permDexterity','permMetallicize','permThorns','heal'];
     return [...EFFECT_FIELD_DEFS.filter(d=>allowed.includes(d.key)), ...RELIC_META_FIELDS];
   }
-  const excluded = ['permStrength','permDexterity','permMetallicize','permThorns'];
-  const defs = allEffectFieldDefs().filter(d=>!excluded.includes(d.key));
-  return timing==='combatEnd' ? [...defs, RELIC_META_FIELDS.find(d=>d.key==='goldBonus')] : defs;
+  if(timing==='combatEnd') return combatEndFieldDefs();
+  // Recurring timings: the full card vocabulary, plus permanent gains (permanent stats,
+  // max HP, energy/draw, ...). Permanent gains add up every time the relic fires.
+  return [...allEffectFieldDefs(), ...RELIC_META_FIELDS];
+}
+// At combat end the enemy is already dead, so damage/block/draw make no sense. What does
+// make sense: permanent gains, healing, and buffs/debuffs that are carried over to the
+// start of the NEXT battle (statuses are otherwise reset at the start of every battle).
+const CE_STATUS_MAP = {
+  strength:['p','strength'], dexterity:['p','dexterity'], metallicize:['p','metallicize'], thorns:['p','thorns'], regen:['p','regen'],
+  selfWeak:['p','weak'], selfVulnerable:['p','vulnerable'], selfPoison:['p','poison'],
+  weak:['e','weak'], vulnerable:['e','vulnerable'], poison:['e','poison'], stun:['e','stun'],
+};
+const CE_DIRECT_KEYS = ['permStrength','permDexterity','permMetallicize','permThorns','heal','loseHp'];
+function combatEndFieldDefs(){
+  const tidy = str=> str.replace(/（この戦闘中のみ[^）]*）/,'');
+  const out = [];
+  allEffectFieldDefs().forEach(d=>{
+    if(d.key==='loseHp') out.push({...d, label:'自分へのダメージ（代償。HPは1未満にならない）'});
+    else if(CE_DIRECT_KEYS.includes(d.key)) out.push(d);
+    else if(CE_STATUS_MAP[d.key] || d._statusId){
+      out.push({...d, label:'次の戦闘: '+tidy(d.label), desc:(v)=>'次の戦闘の開始時に'+tidy(d.desc(v))});
+    }
+  });
+  return out.concat(RELIC_META_FIELDS);
+}
+function relicTimingHint(t){
+  if(t==='onPickup') return '';
+  if(t==='combatEnd') return '「次の戦闘」の項目は、次の戦闘の開始時にだけ反映されます。永続の強化・最大HP・ゴールドなどは、発動のたびに加算されます。';
+  return '永続の強化・最大HPなどは、発動のたびに加算されます（ターン開始時などに設定すると急速に大きくなります）。エネルギー・ドローの永続増加は、発動した戦闘中にもすぐ反映されます。';
 }
 
 function relicDescription(relic){
@@ -3466,11 +3574,64 @@ function fireRelicTiming(r, timing, playedCard){
       if(!tagOk) return;
     }
     const e = relic.effect || {};
-    if(timing==='combatEnd' && e.goldBonus){
-      r.player.gold += e.goldBonus;
-      pushLog(`${relic.name}: ゴールド+${e.goldBonus}。`);
-    }
+    if(timing==='combatEnd'){ applyCombatEndRelic(r, relic, e); return; }
+    applyRelicMeta(r, relic, e, 'battle');
     applyEffectValues(r, {name: relic.name, ...e});
+  });
+}
+
+// Permanent, non-card gains shared by every timing. mode: 'pickup' (silent, outside combat),
+// 'battle' (mid-combat: energy/draw also take effect immediately), 'end' (combat over).
+function applyRelicMeta(r, relic, e, mode){
+  const p = r.player;
+  const L = str=>{ if(mode!=='pickup') pushLog(`${relic.name}: ${str}`); };
+  if(e.maxHpBonus){ p.maxHp += e.maxHpBonus; p.hp = Math.min(p.maxHp, p.hp + e.maxHpBonus); L(`最大HP+${e.maxHpBonus}。`); }
+  if(e.goldBonus){ p.gold += e.goldBonus; L(`ゴールド+${e.goldBonus}。`); }
+  if(e.extraEnergy){
+    p.extraEnergy = (p.extraEnergy||0) + e.extraEnergy;
+    if(mode==='battle') p.energy += e.extraEnergy;
+    L(`毎ターンのエネルギー+${e.extraEnergy}（永続）。`);
+  }
+  if(e.extraDraw){
+    p.extraDraw = (p.extraDraw||0) + e.extraDraw;
+    L(`毎ターンのドロー+${e.extraDraw}（永続）。`);
+    if(mode==='battle') drawCards(e.extraDraw);
+  }
+  if(e.extraRewardChoices){ p.extraRewardChoices = (p.extraRewardChoices||0) + e.extraRewardChoices; L(`カード報酬の選択肢+${e.extraRewardChoices}。`); }
+  if(e.rerollTokens){ p.rerollTokens = (p.rerollTokens||0) + e.rerollTokens; L(`リロールトークン+${e.rerollTokens}。`); }
+}
+
+function queueNextCombat(r, side, key, amt){
+  const nc = r.nextCombat = r.nextCombat || {p:{}, e:{}, cp:{}, ce:{}};
+  nc[side][key] = (nc[side][key]||0) + amt;
+}
+function applyCombatEndRelic(r, relic, e){
+  const p = r.player;
+  const L = str=> pushLog(`${relic.name}: ${str}`);
+  applyRelicMeta(r, relic, e, 'end');
+  ['permStrength','permDexterity','permMetallicize','permThorns'].forEach(k=>{
+    if(e[k]>0){
+      p[k] = (p[k]||0) + e[k];
+      L(EFFECT_FIELD_DEFS.find(d=>d.key===k).desc(e[k])+'。');
+    }
+  });
+  if(e.heal>0){ p.hp = Math.min(p.maxHp, p.hp + e.heal); L(`HPを${e.heal}回復。`); }
+  if(e.loseHp>0){ p.hp = Math.max(1, p.hp - e.loseHp); L(`自分に${e.loseHp}ダメージ。`); }
+  Object.keys(CE_STATUS_MAP).forEach(k=>{
+    if(e[k]>0){
+      const [side, field] = CE_STATUS_MAP[k];
+      queueNextCombat(r, side, field, e[k]);
+      const def = EFFECT_FIELD_DEFS.find(d=>d.key===k);
+      L(`次の戦闘の開始時に${def.desc(e[k]).replace(/（この戦闘中のみ[^）]*）/,'')}。`);
+    }
+  });
+  customStatusFieldDefs().forEach(def=>{
+    const amt = e[def.key];
+    if(!(amt>0)) return;
+    const st = (S.customStatuses||[]).find(x=>x.id===def._statusId);
+    if(!st) return;
+    queueNextCombat(r, st.target==='opponent' ? 'ce' : 'cp', st.id, amt);
+    L(`次の戦闘の開始時に${def.desc(amt)}。`);
   });
 }
 
@@ -3478,12 +3639,7 @@ function applyRelicEffect(r, relic){
   r.player.relics.push(relic.id);
   if((relic.timing||'onPickup') !== 'onPickup') return; // recurring relics fire later, from fireRelicTiming
   const e = relic.effect || {};
-  if(e.maxHpBonus){ r.player.maxHp += e.maxHpBonus; r.player.hp = Math.min(r.player.maxHp, r.player.hp + e.maxHpBonus); }
-  if(e.goldBonus) r.player.gold += e.goldBonus;
-  if(e.extraEnergy) r.player.extraEnergy = (r.player.extraEnergy||0) + e.extraEnergy;
-  if(e.extraDraw) r.player.extraDraw = (r.player.extraDraw||0) + e.extraDraw;
-  if(e.extraRewardChoices) r.player.extraRewardChoices = (r.player.extraRewardChoices||0) + e.extraRewardChoices;
-  if(e.rerollTokens) r.player.rerollTokens = (r.player.rerollTokens||0) + e.rerollTokens;
+  applyRelicMeta(r, relic, e, 'pickup');
   applyEffectValues(r, {name: relic.name, ...e});
 }
 
