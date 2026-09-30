@@ -115,6 +115,9 @@
   .card.type-skill .art{ background:repeating-linear-gradient(135deg,#cfe0e3,#cfe0e3 8px,#c0d4d8 8px,#c0d4d8 16px);}
   .card.type-power .art{ background:repeating-linear-gradient(135deg,#ded3ea,#ded3ea 8px,#d0c0e0 8px,#d0c0e0 16px);}
   .card .desc{ font-size:11px; line-height:1.35; padding:7px 8px; background:var(--parchment); min-height:56px;}
+  .card .art{ display:flex; align-items:center; justify-content:center; }
+  .card .card-icon{ font-size:44px; filter:drop-shadow(0 2px 2px rgba(0,0,0,.25)); }
+  .card.mini .card-icon{ font-size:34px; }
   .card .rarity-dot{ position:absolute; bottom:5px; right:7px; font-size:9px; letter-spacing:.03em; color:var(--ink-soft); font-family:var(--font-en); }
 
   /* small card for editor list */
@@ -186,6 +189,36 @@
   .settings-card{ background:var(--bg-panel); border:1px solid var(--line); border-radius:8px; padding:20px; max-width:520px; margin:0 auto;}
   .hint{ font-size:11.5px; color:var(--ink-soft); margin-top:2px;}
 
+  /* ---------- Images ---------- */
+  .img-field{ display:flex; gap:12px; align-items:center; }
+  .img-preview{ width:96px; height:96px; border:1px dashed var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; color:var(--parchment-dim); font-size:12px; flex-shrink:0; background:var(--bg-void); }
+  .img-preview img{ width:100%; height:100%; object-fit:contain; }
+  .img-ctrl{ display:flex; flex-direction:column; gap:6px; align-items:flex-start; font-size:12px; min-width:0; }
+  .img-ctrl input[type=file]{ width:100%; padding:4px; font-size:12px; }
+  .img-ctrl button{ padding:4px 10px; font-size:12px; }
+  .card .art .art-img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .combatant .portrait.has-img{ width:150px; height:150px; border-radius:12px; overflow:hidden; background:transparent; border-width:1px; }
+  .combatant .portrait.has-img img{ width:100%; height:100%; object-fit:contain; display:block; }
+  .ev-image{ display:block; margin:14px auto 0; max-width:min(100%,440px); max-height:240px; border-radius:10px; border:1px solid var(--line); object-fit:contain; }
+
+  /* ---------- Events ---------- */
+  .event-choice{ display:flex; flex-direction:column; align-items:center; gap:3px; }
+  .ev-fx{ font-size:11.5px; color:var(--parchment-dim); }
+  .event-choice:hover:not(:disabled) .ev-fx{ color:var(--gold); }
+  .ev-result-lines{ margin:14px auto 0; max-width:420px; font-size:12.5px; color:var(--gold); }
+  .ev-result-lines div{ margin-bottom:3px; }
+  .ev-hint{ font-size:12px; color:var(--parchment-dim); margin:4px 0 12px; }
+  .ev-form .ev-card{ max-width:none; margin-bottom:8px; }
+  .ev-choice{ background:var(--bg-panel); border:1px solid var(--line); border-radius:8px; padding:14px; margin-bottom:14px; }
+  .ev-choice-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; color:var(--gold); }
+  .ev-choice-head button, .ev-eff-head button{ padding:4px 10px; font-size:12px; }
+  .ev-sub{ font-family:var(--font-en); font-style:italic; color:var(--gold); font-size:13px; margin:12px 0 8px; border-top:1px solid var(--line); padding-top:10px; }
+  .ev-eff{ background:var(--bg-void); border:1px solid var(--line); border-radius:5px; padding:8px 10px; margin-bottom:8px; }
+  .ev-eff-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:13px; }
+  .ev-eff-grid{ display:flex; gap:8px; flex-wrap:wrap; }
+  .ev-eff-grid > div{ flex:1; min-width:120px; }
+  .ev-add{ display:flex; gap:8px; margin-top:8px; }
+  .ev-add select{ flex:1; }
   ::-webkit-scrollbar{ height:8px; width:8px; }
   ::-webkit-scrollbar-thumb{ background:var(--line); border-radius:4px; }
 </style>
@@ -326,7 +359,6 @@ const SETTING_COSTS = [
   {key:'rerollTagExtra', label:'タグ指定リロールの追加料金（ゴールド払い時）', def:30, max:999},
   {key:'rerollShopBase', label:'ショップ入れ替えの基本価格', def:25, max:999},
   {key:'rerollShopStep', label:'ショップ入れ替えの1回ごとの値上がり', def:15, max:999},
-  {key:'eventMerchantCost', label:'イベント「旅の行商人」の消費ゴールド', def:40, max:999},
   {key:'shopPriceCommon', label:'ショップのカード価格（コモン）', def:50, max:999},
   {key:'shopPriceUncommon', label:'ショップのカード価格（アンコモン）', def:85, max:999},
   {key:'shopPriceRare', label:'ショップのカード価格（レア）', def:150, max:999},
@@ -353,6 +385,22 @@ const RARITY_WEIGHT = {common:60, uncommon:30, rare:10};
 
 // Older saves may have "timing"/"triggerTag"/"duration" nested inside cardOp
 // (from before those settings applied to the whole card). Lift them to the top level.
+const TYPE_DEFAULT_ICON = {attack:'⚔️', skill:'🛡️', power:'✨'};
+const DEFAULT_ICONS = {
+  strike:'⚔️', defend:'🛡️', bash:'🔨', heavyslash:'🪓', ironwave:'🌊',
+  quickslice:'💨', shrugitoff:'🧥', poisonstab:'🧪', focusmind:'🧠',
+  guardbreak:'💥', adrenaline:'💉', rampage:'🔥', bulwark:'🏰',
+  inflame:'😡', ironskin:'🪨', demonform:'👿', bloodletting:'🩸',
+  engraved_might:'💪', engraved_wall:'🧱', flurry_strike:'🗡️', blood_gambit:'🩸'
+};
+// icon set on the card wins; otherwise a per-card default, then a per-type default
+function cardIcon(c){
+  if(c && c.icon) return c.icon;
+  const baseId = String((c && (c.baseId || c.id)) || '').replace(/\+$/,'');
+  if(DEFAULT_ICONS[baseId]) return DEFAULT_ICONS[baseId];
+  if(baseId.indexOf('enemy_buf_')===0) return '📢';
+  return (c && TYPE_DEFAULT_ICON[c.type]) || '❔';
+}
 function migrateCard(c){
   if(c && c.cardOp && c.cardOp.timing!==undefined){
     if(c.timing===undefined) c.timing = c.cardOp.timing;
@@ -418,7 +466,20 @@ function loadEnemies(){
   return DEFAULT_ENEMIES;
 }
 function saveEnemies(list){
-  try{ localStorage.setItem('enemies', JSON.stringify(list)); }catch(e){ console.error(e); }
+  try{ localStorage.setItem('enemies', JSON.stringify(list)); }catch(e){ console.error(e); storageFailed(); }
+}
+function loadEvents(){
+  try{
+    const value = localStorage.getItem('events');
+    if(value){
+      const list = JSON.parse(value);
+      if(Array.isArray(list) && list.length) return list.map(normalizeEvent);
+    }
+  }catch(e){ console.error(e); }
+  return JSON.parse(JSON.stringify(DEFAULT_EVENTS)).map(normalizeEvent);
+}
+function saveEvents(list){
+  try{ localStorage.setItem('events', JSON.stringify(list)); }catch(e){ console.error(e); storageFailed(); }
 }
 function loadRelics(){
   try{
@@ -439,6 +500,7 @@ const S = {
   relics: [],
   customStatuses: [],
   enemies: [],
+  events: [],
   settings: {...DEFAULT_SETTINGS},
   run: null, // battle/run state
   editingCard: null,
@@ -625,7 +687,7 @@ function renderCardHTML(c, opts){
   <div class="card type-${c.type} ${mini} ${unplayable}" data-cardinst="${opts.instId||''}" data-cardid="${c.id}">
     <div class="cost">${c.cost}</div>
     <div class="banner"><div class="name">${c.name}</div></div>
-    <div class="art"></div>
+    <div class="art"><span class="card-icon">${cardIcon(c)}</span></div>
     <div class="desc">${cardDescription(c)}</div>
     <div class="rarity-dot">${RARITY_LABEL[c.rarity]||''}</div>
   </div>`;
@@ -650,6 +712,7 @@ function renderHome(){
       <button id="btn-settings">ルール設定</button>
       <button id="btn-statuses">カスタム状態を編集</button>
       <button id="btn-enemies">敵を編集</button>
+      <button id="btn-events">イベントを編集</button>
       <button id="btn-data">データの保存・読み込み</button>
     </div>
     <p class="home-foot">全${S.cards.length}種のカード ・ 全${S.relics.length}種のレリック ・ 全${S.settings.floorCount}階層の探索</p>
@@ -661,6 +724,7 @@ function renderHome(){
   qs('#btn-data').onclick = ()=>{ S.screen='data'; dataScreenState.msg=''; dataScreenState.pending=null; renderDataScreen(); };
   qs('#btn-statuses').onclick = ()=>{ S.screen='statuses'; renderStatusEditor(); };
   qs('#btn-enemies').onclick = ()=>{ S.screen='enemies'; renderEnemyEditor(); };
+  qs('#btn-events').onclick = ()=>{ S.screen='events'; renderEventEditor(); };
 }
 
 /* ============================= DATA SAVE / LOAD ============================= */
@@ -704,6 +768,7 @@ function normalizeCard(c){
   if(!Array.isArray(c.tags)) c.tags = [];
   if(!c.scales || typeof c.scales!=='object') c.scales = {};
   if(!Number.isFinite(c.startingCount)) c.startingCount = 0;
+  if(typeof c.icon!=='string') c.icon = '';
   return c;
 }
 function normalizeRelic(r){
@@ -724,6 +789,74 @@ function normalizeCustomStatus(st){
   if(st.target!=='self') st.cardOp = {enabled:false};
   return st;
 }
+/* ============================= IMAGES ============================= */
+// Pictures (enemies, events) are stored inside the data itself as small "data:" URLs, so
+// they travel with save files and need no server. Uploads are shrunk first to keep the
+// browser's storage (about 5 MB in total) from filling up.
+const IMAGE_MAX_CHARS = 700000;
+function cleanImage(v){
+  return (typeof v==='string' && v.length<=IMAGE_MAX_CHARS && /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+\/=]+$/.test(v)) ? v : '';
+}
+function imageFileToDataUrl(file, maxSide, done){
+  if(!file || !/^image\//.test(file.type)){ done(null,'画像ファイルを選んでください。'); return; }
+  const reader = new FileReader();
+  reader.onerror = ()=> done(null,'画像を読み込めませんでした。');
+  reader.onload = ()=>{
+    const img = new Image();
+    img.onerror = ()=> done(null,'画像を読み込めませんでした。');
+    img.onload = ()=>{
+      let side = maxSide, out = '';
+      for(let attempt=0; attempt<5; attempt++){
+        const scale = Math.min(1, side/Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width*scale)), h = Math.max(1, Math.round(img.height*scale));
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        out = cv.toDataURL('image/webp', 0.85);
+        if(out.indexOf('data:image/webp')!==0) out = cv.toDataURL('image/png'); // browsers without WebP export
+        if(out.length <= 350000) break;
+        side = Math.round(side*0.75);
+      }
+      const clean = cleanImage(out);
+      if(clean) done(clean); else done(null,'画像が大きすぎて縮小できませんでした。別の画像を試してください。');
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+function imageFieldHTML(prefix, image){
+  return `<div class="img-field">
+    <div class="img-preview" id="${prefix}-img-preview">${image ? `<img src="${image}" alt="">` : '<span>なし</span>'}</div>
+    <div class="img-ctrl">
+      <input type="file" accept="image/*" id="${prefix}-img-file">
+      <button type="button" id="${prefix}-img-clear" ${image?'':'disabled'}>画像を削除</button>
+    </div>
+  </div>`;
+}
+function bindImageField(root, prefix, maxSide, get, set){
+  const fileEl = qs(`#${prefix}-img-file`, root), clr = qs(`#${prefix}-img-clear`, root), prev = qs(`#${prefix}-img-preview`, root);
+  const refresh = ()=>{
+    const v = get();
+    prev.innerHTML = v ? `<img src="${v}" alt="">` : '<span>なし</span>';
+    clr.disabled = !v;
+  };
+  fileEl.onchange = ()=>{
+    const f = fileEl.files && fileEl.files[0];
+    if(!f) return;
+    imageFileToDataUrl(f, maxSide, (url, err)=>{
+      if(err){ alert(err); return; }
+      set(url); refresh();
+    });
+  };
+  clr.onclick = ()=>{ set(''); fileEl.value = ''; refresh(); };
+}
+function artHTML(image, fallback){
+  return image ? `<img class="art-img" src="${image}" alt="">` : `<span class="card-icon">${fallback}</span>`;
+}
+function storageFailed(){
+  alert('保存に失敗しました。ブラウザの保存容量がいっぱいの可能性があります（画像が多い・大きい場合など）。\n画像を減らすか、「データの保存・読み込み」でファイルに書き出してください。このままページを閉じると、変更が失われます。');
+}
+
 function normalizeEnemy(e){
   e = migrateEnemy({...e});
   if(!['normal','elite','boss'].includes(e.category)) e.category = 'normal';
@@ -733,6 +866,7 @@ function normalizeEnemy(e){
   e.deck = e.deck.filter(x=> x && S.cards.some(c=>c.id===x.cardId))
     .map(x=>({cardId:x.cardId, weight: Number.isFinite(x.weight) ? Math.max(1, Math.floor(x.weight)) : 1}));
   if(!e.startEffect || typeof e.startEffect!=='object') e.startEffect = {};
+  e.image = cleanImage(e.image);
   return e;
 }
 // Only known keys of the right type are taken (numbers stay numbers, switches stay booleans).
@@ -759,6 +893,9 @@ const DATA_SECTIONS = [
   {key:'enemies', label:'敵', kind:'list', get:()=>S.enemies, set:(v)=>{ S.enemies = v; saveEnemies(v); },
    check:(x)=> x && validSaveId(x.id) && typeof x.name==='string' && x.name.trim() && ['normal','elite','boss'].includes(x.category||(x.boss?'boss':x.elite?'elite':'normal')),
    normalize:normalizeEnemy},
+  {key:'events', label:'イベント', kind:'list', get:()=>S.events, set:(v)=>{ S.events = v; saveEvents(v); },
+   check:(x)=> x && validSaveId(x.id) && typeof x.title==='string' && x.title.trim() && Array.isArray(x.choices) && x.choices.length>0,
+   normalize:normalizeEvent},
   {key:'settings', label:'ルール設定', kind:'object', get:()=>S.settings, set:(v)=>{ S.settings = v; saveSettings(v); }},
 ];
 
@@ -1859,7 +1996,7 @@ function renderEnemyEditor(){
       html += `<div class="editor-card-wrap" data-id="${en.id}">
         <div class="card mini" style="cursor:default;">
           <div class="banner" style="background:linear-gradient(90deg,#7a4a3a,#3a1e14);"><div class="name">${en.emoji||''} ${en.name}</div></div>
-          <div class="art"></div>
+          <div class="art">${artHTML(en.image, en.emoji||'👾')}</div>
           <div class="desc">HP${en.baseHp}・重み${en.weight}・デッキ${en.deck.length}種</div>
         </div>
         <div class="edit-actions">
@@ -1893,7 +2030,7 @@ function renderEnemyEditor(){
   });
   qsa('.add-card-tile').forEach(tile=>{
     tile.onclick = ()=>{
-      openEnemyModal({ id:newId(), name:'新しい敵', emoji:'👾', category: tile.dataset.category, baseHp:30, weight:1, deck:[], startEffect:{} }, true);
+      openEnemyModal({ id:newId(), name:'新しい敵', emoji:'👾', image:'', category: tile.dataset.category, baseHp:30, weight:1, deck:[], startEffect:{} }, true);
     };
   });
 }
@@ -1910,7 +2047,9 @@ function openEnemyModal(enemy, isNew){
     <div class="modal-box">
       <h3>${isNew? '敵を新規作成' : '敵を編集'}</h3>
       <div class="field"><label>名前</label><input type="text" id="em-name" value="${en.name}"></div>
-      <div class="field"><label>絵文字</label><input type="text" id="em-emoji" value="${en.emoji||''}" maxlength="4"></div>
+      <div class="field"><label>絵文字（画像がないときに表示）</label><input type="text" id="em-emoji" value="${en.emoji||''}" maxlength="4"></div>
+      <div class="field"><label>画像（任意。設定すると戦闘画面で絵文字の代わりに表示されます）</label>${imageFieldHTML('em', en.image)}
+        <p class="hint">大きい画像は自動で縮小されます。動くGIFは静止画になります。</p></div>
       <div class="field"><label>種別</label>
         <select id="em-category">
           <option value="normal" ${en.category==='normal'?'selected':''}>通常</option>
@@ -1944,6 +2083,7 @@ function openEnemyModal(enemy, isNew){
     </div>
   </div>`);
   document.body.appendChild(overlay);
+  bindImageField(overlay, 'em', 400, ()=>en.image||'', v=>{ en.image = v; });
 
   function renderMoveList(){
     const box = qs('#em-move-list',overlay);
@@ -1988,6 +2128,7 @@ function openEnemyModal(enemy, isNew){
       id: en.id,
       name: qs('#em-name',overlay).value.trim() || '無名の敵',
       emoji: (qs('#em-emoji',overlay).value||'').trim(),
+      image: en.image||'',
       category: qs('#em-category',overlay).value,
       baseHp: clampInt(qs('#em-hp',overlay).value,1,999,30),
       weight: clampInt(qs('#em-weight',overlay).value,1,20,1),
@@ -2353,6 +2494,7 @@ function openCardModal(card, isNew){
     <div class="modal-box">
       <h3>${isNew? 'カードを新規作成' : 'カードを編集'}</h3>
       <div class="field"><label>カード名</label><input type="text" id="m-name" value="${c.name}"></div>
+      <div class="field"><label>アイコン（絵文字。空欄なら初期アイコン。敵の行動予告にも表示されます）</label><input type="text" id="m-icon" value="${c.icon||''}" maxlength="4" placeholder="${cardIcon(c)}"></div>
       <div class="row">
         <div class="field"><label>タイプ</label>
           <select id="m-type">
@@ -2541,6 +2683,7 @@ function openCardModal(card, isNew){
     const updated = {
       id: c.id,
       name: qs('#m-name',overlay).value.trim() || '無名のカード',
+      icon: (qs('#m-icon',overlay).value||'').trim(),
       type: qs('#m-type',overlay).value,
       cost: clampInt(qs('#m-cost',overlay).value,0,6,1),
       rarity: qs('#m-rarity',overlay).value,
@@ -2730,7 +2873,7 @@ function makeEnemy(floorIndex){
   const scale = 1 + (Math.max(0,floorIndex-1) * (s.enemyHpScalePct/100));
   const hp = Math.round(t.baseHp * scale);
   const runtimeEnemy = {
-    name: t.name, emoji: t.emoji, elite: t.category==='elite', boss: t.category==='boss',
+    name: t.name, emoji: t.emoji, image: t.image||'', elite: t.category==='elite', boss: t.category==='boss',
     hp, maxHp: hp, block:0, strength:0, dexterity:0, weak:0, vulnerable:0, poison:0, stun:0, thorns:0,
     deck: t.deck && t.deck.length ? t.deck : [{cardId:'strike', weight:1}],
     customStatus: {}, startEffect: t.startEffect || {},
@@ -2780,6 +2923,7 @@ function startRun(){
     rewardRerollCount:0,
     rewardFocusTag:'',
     shopRerollCount:0,
+    nextCombat:null,
   };
   S.run.draw = shuffle(S.run.deck);
   S.run.deck = [];
@@ -2833,6 +2977,7 @@ function beginFloor(){
   r.player.block = 0;
   r.log = [];
   pushLog(`${r.enemy.name}が現れた！`);
+  applyNextCombatEffects(r);
   startPlayerTurn(true);
   fireRelicTiming(r, 'combatStart');
   S.screen='battle';
@@ -3074,18 +3219,39 @@ function statusChips(entity){
 }
 function intentLabel(e){
   const c = cardById(e.nextMoveId);
-  if(!c) return {cls:'buf', text:'？'};
-  // Priority mirrors what a player most cares about seeing coming: incoming damage
-  // first, then block, then anything else (buffs/debuffs/heal/custom statuses).
+  if(!c) return {cls:'buf', text:'予告: ？'};
+  // Format: 予告: <icon><skill name> <effect><value>・<effect><value>...
+  // Damage/block already include the enemy's current strength/dexterity, as before.
+  const parts = [];
+  const hits = Math.max(1, c.hits||1);
   if(c.damage>0){
-    const hits = Math.max(1, c.hits||1);
     const per = c.damage + e.strength;
-    return {cls:'atk', text:`⚔️ 攻撃予告：${hits>1?`${per}×${hits}`:per}`};
+    parts.push(`ダメージ${per}${hits>1?`×${hits}`:''}`);
   }
-  if(c.block>0) return {cls:'def', text:`🛡️ 防御予告：${c.block + e.dexterity}`};
-  if(c.strength>0 || c.permStrength>0) return {cls:'buf', text:`✨ 強化予告：+${(c.strength||0)+(c.permStrength||0)}`};
-  if(c.heal>0) return {cls:'buf', text:`💚 回復予告：+${c.heal}`};
-  return {cls:'buf', text:`✨ ${c.name}`};
+  if(c.block>0) parts.push(`ブロック${c.block + e.dexterity}`);
+  const str = (c.strength||0)+(c.permStrength||0);
+  if(str>0) parts.push(`強化${str}`);
+  const dex = (c.dexterity||0)+(c.permDexterity||0);
+  if(dex>0) parts.push(`器用${dex}`);
+  const met = (c.metallicize||0)+(c.permMetallicize||0);
+  if(met>0) parts.push(`自動ブロック${met}`);
+  const thr = (c.thorns||0)+(c.permThorns||0);
+  if(thr>0) parts.push(`棘${thr}`);
+  if(c.weak>0) parts.push(`弱体${c.weak}`);
+  if(c.vulnerable>0) parts.push(`脆弱${c.vulnerable}`);
+  if(c.poison>0) parts.push(`毒${c.poison}`);
+  if(c.heal>0) parts.push(`回復${c.heal}`);
+  if(c.regen>0) parts.push(`再生${c.regen}`);
+  customStatusFieldDefs().forEach(def=>{
+    const amt = c[def.key];
+    if(amt>0){
+      const st = (S.customStatuses||[]).find(x=>x.id===def._statusId);
+      if(st) parts.push(`${st.emoji||''}${st.name}${amt}`);
+    }
+  });
+  const cls = c.damage>0 ? 'atk' : (c.block>0 ? 'def' : 'buf');
+  const base = c.baseId ? c.name : c.name;
+  return {cls, text:`予告: ${cardIcon(c)}${escapeHtml(base)}${parts.length?' '+parts.join('・'):''}`};
 }
 
 function renderCardChoiceOverlay(r){
@@ -3144,7 +3310,7 @@ function renderBattle(){
       </div>
       <div class="vsmark">VS</div>
       <div class="combatant enemy">
-        <div class="portrait">${e.emoji}</div>
+        <div class="portrait ${e.image?'has-img':''}">${e.image ? `<img src="${e.image}" alt="">` : e.emoji}</div>
         <div class="cname">${e.name}</div>
         <div class="hpbar-wrap"><div class="hpbar-fill" style="width:${Math.max(0,100*e.hp/e.maxHp)}%"></div><div class="hpbar-text">${e.hp} / ${e.maxHp}${e.block?` (🛡${e.block})`:''}</div></div>
         <div class="statuses">${statusChips(e)}</div>
@@ -3338,92 +3504,629 @@ function renderRelicReward(){
   qs('#btn-relic-skip').onclick = ()=>{ r.pendingRelic=null; S.screen='reward'; renderReward(); };
 }
 
-const EVENT_TEMPLATES = [
-  {title:'朽ちた祭壇', desc:'古い祭壇の上に、赤黒い液体で満ちた小瓶が置かれている。', choices:[
-    {label:'血を捧げて飲み干す（HP-10 / 強化+2 永続）', apply:(r)=>{ r.player.hp=Math.max(1,r.player.hp-10); r.player.permStrength+=2; return '力が全身に満ちるのを感じる。しかし体は重い。'; }},
-    {label:'何も持たずに立ち去る', apply:()=>'祭壇に背を向け、静かに先へ進んだ。'},
+/* ============================= EVENTS (data-driven) ============================= */
+// Events are stored as data (S.events) and edited from the home screen. Each event has a
+// number of choice "slots" (1-3) and a pool of candidate choices; when the event shows up,
+// the slots are filled from the pool. Every choice carries a list of effects that run in
+// order, so good and bad effects can be bundled freely.
+
+const EV_RARITY_OPTIONS = [
+  {key:'any', label:'指定なし'}, {key:'basic', label:'ベーシック'}, {key:'common', label:'コモン'},
+  {key:'uncommon', label:'アンコモン'}, {key:'rare', label:'レア'}, {key:'uncommon+', label:'アンコモン以上'},
+];
+function evSgn(a){ return (a>0?'+':'')+a; }
+function evRarityOk(rarity, want, forGain){
+  if(!want || want==='any') return forGain ? rarity!=='basic' : true;
+  if(want==='uncommon+') return rarity==='uncommon' || rarity==='rare';
+  return rarity===want;
+}
+function evRarityLabel(key){ return (EV_RARITY_OPTIONS.find(o=>o.key===key)||{}).label || ''; }
+
+const EV_NUM = {
+  hp:{label:'HP増減（マイナスでダメージ。HPは1未満にならない）', signed:true, text:a=>`HP${evSgn(a)}`},
+  maxHp:{label:'最大HP増減', signed:true, text:a=>`最大HP${evSgn(a)}`},
+  gold:{label:'ゴールド増減（マイナスの場合、足りないと選べない）', signed:true, text:a=>`ゴールド${evSgn(a)}`},
+  permStrength:{label:'強化+', text:a=>`強化+${a}（永続）`},
+  permDexterity:{label:'器用+', text:a=>`器用+${a}（永続）`},
+  permMetallicize:{label:'自動ブロック+', text:a=>`自動ブロック+${a}（永続）`},
+  permThorns:{label:'棘+', text:a=>`棘+${a}（永続）`},
+  extraEnergy:{label:'毎ターンのエネルギー増減', signed:true, text:a=>`毎ターンのエネルギー${evSgn(a)}（永続）`},
+  extraDraw:{label:'毎ターンのドロー増減', signed:true, text:a=>`毎ターンのドロー${evSgn(a)}（永続）`},
+  extraRewardChoices:{label:'カード報酬の選択肢+', text:a=>`カード報酬の選択肢+${a}（永続）`},
+  rerollTokens:{label:'リロールトークン+', text:a=>`リロールトークン+${a}`},
+  nextStrength:{label:'強化+', text:a=>`強化+${a}（次の戦闘のみ）`},
+  nextDexterity:{label:'器用+', text:a=>`器用+${a}（次の戦闘のみ）`},
+  nextMetallicize:{label:'自動ブロック+', text:a=>`自動ブロック+${a}（次の戦闘のみ）`},
+  nextThorns:{label:'棘+', text:a=>`棘+${a}（次の戦闘のみ）`},
+  nextRegen:{label:'再生+', text:a=>`再生${a}（次の戦闘のみ）`},
+  nextWeak:{label:'自分に弱体', text:a=>`自分に弱体${a}（次の戦闘のみ）`},
+  nextVulnerable:{label:'自分に脆弱', text:a=>`自分に脆弱${a}（次の戦闘のみ）`},
+  nextPoison:{label:'自分に毒', text:a=>`自分に毒${a}（次の戦闘のみ）`},
+  nextEnemyStrength:{label:'敵の強化+', text:a=>`敵の強化+${a}（次の戦闘のみ）`},
+  nextEnemyWeak:{label:'敵に弱体', text:a=>`敵に弱体${a}（次の戦闘のみ）`},
+  nextEnemyVulnerable:{label:'敵に脆弱', text:a=>`敵に脆弱${a}（次の戦闘のみ）`},
+  nextEnemyPoison:{label:'敵に毒', text:a=>`敵に毒${a}（次の戦闘のみ）`},
+  nextEnemyStun:{label:'敵を麻痺させる（ターン数）', text:a=>`敵を${a}ターン麻痺（次の戦闘のみ）`},
+};
+const EV_SPECIAL = {
+  nextCustom:{label:'カスタム状態を付与'},
+  gainCard:{label:'カードを入手'}, removeCard:{label:'カードを失う'},
+  upgradeCard:{label:'カードを強化'}, duplicateCard:{label:'カードを複製'},
+  gainRelic:{label:'レリックを入手'},
+};
+const EV_GROUPS = [
+  ['HP・ゴールド', ['hp','maxHp','gold']],
+  ['永続の能力', ['permStrength','permDexterity','permMetallicize','permThorns','extraEnergy','extraDraw','extraRewardChoices','rerollTokens']],
+  ['次の戦闘のみ（自分）', ['nextStrength','nextDexterity','nextMetallicize','nextThorns','nextRegen','nextWeak','nextVulnerable','nextPoison']],
+  ['次の戦闘のみ（敵）', ['nextEnemyStrength','nextEnemyWeak','nextEnemyVulnerable','nextEnemyPoison','nextEnemyStun']],
+  ['次の戦闘のみ（カスタム状態）', ['nextCustom']],
+  ['デッキ', ['gainCard','removeCard','upgradeCard','duplicateCard']],
+  ['レリック', ['gainRelic']],
+];
+const EV_NEXT_PLAYER = {nextStrength:'strength', nextDexterity:'dexterity', nextMetallicize:'metallicize', nextThorns:'thorns', nextRegen:'regen', nextWeak:'weak', nextVulnerable:'vulnerable', nextPoison:'poison'};
+const EV_NEXT_ENEMY = {nextEnemyStrength:'strength', nextEnemyWeak:'weak', nextEnemyVulnerable:'vulnerable', nextEnemyPoison:'poison', nextEnemyStun:'stun'};
+const EV_DECK_OPS = ['removeCard','upgradeCard','duplicateCard'];
+
+function evKindValid(k){ return !!(EV_NUM[k] || EV_SPECIAL[k]); }
+function evKindLabel(k){ return (EV_NUM[k]||EV_SPECIAL[k]||{}).label || k; }
+function evKindHeader(k){
+  const g = EV_GROUPS.find(x=>x[1].includes(k));
+  return (g ? g[0]+'：' : '') + evKindLabel(k);
+}
+function newEventEffect(kind){
+  if(EV_NUM[kind]) return {kind, amount: (kind==='hp'||kind==='gold') ? 10 : 1};
+  if(kind==='nextCustom') return {kind, statusId:((S.customStatuses||[])[0]||{}).id||'', amount:1};
+  if(kind==='gainCard') return {kind, source:'random', cardId:'', rarity:'any', tag:'', count:1};
+  if(kind==='gainRelic') return {kind, source:'random', relicId:'', rarity:'any'};
+  return {kind, mode:'random', rarity:'any', tag:'', count:1};
+}
+function newEventChoice(label){
+  return {label: label||'新しい選択肢', result:'', hideEffects:false, always:false, effects:[]};
+}
+
+/* ---------- normalize (also used for import) ---------- */
+function normalizeEventEffect(x){
+  if(!x || typeof x!=='object' || !evKindValid(x.kind)) return null;
+  const k = x.kind;
+  const str = v=> typeof v==='string' ? v.trim() : '';
+  const rar = v=> EV_RARITY_OPTIONS.some(o=>o.key===v) ? v : 'any';
+  if(EV_NUM[k]){ const s = !!EV_NUM[k].signed; return {kind:k, amount: clampInt(x.amount, s?-999:0, 999, s?0:1)}; }
+  if(k==='nextCustom') return {kind:k, statusId:str(x.statusId), amount:clampInt(x.amount,0,999,1)};
+  if(k==='gainCard') return {kind:k, source:x.source==='specific'?'specific':'random', cardId:str(x.cardId), rarity:rar(x.rarity), tag:str(x.tag), count:clampInt(x.count,1,20,1)};
+  if(k==='gainRelic') return {kind:k, source:x.source==='specific'?'specific':'random', relicId:str(x.relicId), rarity:rar(x.rarity)};
+  return {kind:k, mode:x.mode==='choose'?'choose':'random', rarity:rar(x.rarity), tag:str(x.tag), count:clampInt(x.count,1,20,1)};
+}
+function normalizeEvent(ev){
+  const e = {...ev};
+  e.title = (typeof ev.title==='string' && ev.title.trim()) ? ev.title.trim() : '無題のイベント';
+  e.desc = typeof ev.desc==='string' ? ev.desc : '';
+  e.image = cleanImage(ev.image);
+  e.slots = clampInt(ev.slots,1,3,2);
+  e.weight = clampInt(ev.weight,1,20,1);
+  e.choices = (Array.isArray(ev.choices) ? ev.choices : []).filter(c=>c && typeof c==='object').map(c=>({
+    label: (typeof c.label==='string' && c.label.trim()) ? c.label.trim() : '先へ進む',
+    result: typeof c.result==='string' ? c.result : '',
+    hideEffects: !!c.hideEffects,
+    always: !!c.always,
+    effects: (Array.isArray(c.effects) ? c.effects : []).map(normalizeEventEffect).filter(Boolean),
+  }));
+  if(e.choices.length===0) e.choices = [newEventChoice('先へ進む')];
+  return e;
+}
+
+/* ---------- default events (the original six, as data) ---------- */
+const DEFAULT_EVENTS = [
+  {id:'ev_altar', title:'朽ちた祭壇', desc:'古い祭壇の上に、赤黒い液体で満ちた小瓶が置かれている。', image:'', slots:2, weight:1, choices:[
+    {label:'血を捧げて飲み干す', result:'力が全身に満ちるのを感じる。しかし体は重い。', hideEffects:false, always:false, effects:[{kind:'hp',amount:-10},{kind:'permStrength',amount:2}]},
+    {label:'何も持たずに立ち去る', result:'祭壇に背を向け、静かに先へ進んだ。', hideEffects:false, always:false, effects:[]},
   ]},
-  {title:'旅の行商人', desc:'フードを被った商人が道の端に座り、珍しい品を並べている。', choices:[
-    {get label(){ return `掘り出し物を買う（${S.settings.eventMerchantCost}ゴールド消費・アンコモン以上のカードを1枚入手）`; },
-     get cost(){ return S.settings.eventMerchantCost; },
-     apply:(r)=>{
-      r.player.gold -= S.settings.eventMerchantCost;
-      const pool = S.cards.filter(c=>(c.rarity==='uncommon'||c.rarity==='rare') && !c.generatedOnly && c.usableBy!=='enemy');
-      const pick = pool[Math.floor(Math.random()*pool.length)];
-      if(pick) r.discard.push(pick.id);
-      return pick? `${pick.name}を手に入れた。` : '今日はめぼしい品がなかったようだ。';
-    }},
-    {label:'素通りする（道に落ちていた10ゴールドを拾う）', apply:(r)=>{ r.player.gold+=10; return '足元に転がっていたコインを拾った。'; }},
+  {id:'ev_merchant', title:'旅の行商人', desc:'フードを被った商人が道の端に座り、珍しい品を並べている。', image:'', slots:2, weight:1, choices:[
+    {label:'掘り出し物を買う', result:'商人から品を買い取った。', hideEffects:false, always:false, effects:[{kind:'gold',amount:-40},{kind:'gainCard',source:'random',cardId:'',rarity:'uncommon+',tag:'',count:1}]},
+    {label:'素通りする', result:'足元に転がっていたコインを拾った。', hideEffects:false, always:false, effects:[{kind:'gold',amount:10}]},
   ]},
-  {title:'呪われた宝箱', desc:'苔むした宝箱が不気味な光を放っている。', choices:[
-    {label:'開ける（HP-6 / 60ゴールド獲得）', apply:(r)=>{ r.player.hp=Math.max(1,r.player.hp-6); r.player.gold+=60; return '罠が発動したが、中の財貨は本物だった。'; }},
-    {label:'触れずに立ち去る', apply:()=>'嫌な予感がして、宝箱には触れなかった。'},
+  {id:'ev_chest', title:'呪われた宝箱', desc:'苔むした宝箱が不気味な光を放っている。', image:'', slots:2, weight:1, choices:[
+    {label:'開ける', result:'罠が発動したが、中の財貨は本物だった。', hideEffects:false, always:false, effects:[{kind:'hp',amount:-6},{kind:'gold',amount:60}]},
+    {label:'触れずに立ち去る', result:'嫌な予感がして、宝箱には触れなかった。', hideEffects:false, always:false, effects:[]},
   ]},
-  {title:'古の司書', desc:'ページの擦り切れた本を抱えた老人が、静かに問いかけてくる。', choices:[
-    {label:'知識と引き換える（基本カードを1枚失い、強力なカードを1枚得る）', apply:(r)=>{
-      const basics = ownedCardInstances(r).filter(x=>{ const c=cardById(x.cid); return c && c.rarity==='basic'; });
-      let lostName = null;
-      if(basics.length){
-        const inst = basics[Math.floor(Math.random()*basics.length)];
-        r[inst.pile].splice(inst.i,1);
-        lostName = cardById(inst.cid).name;
-      }
-      const pool = S.cards.filter(c=>(c.rarity==='uncommon'||c.rarity==='rare') && !c.generatedOnly && c.usableBy!=='enemy');
-      const gained = pool[Math.floor(Math.random()*pool.length)];
-      if(gained) r.discard.push(gained.id);
-      return lostName? `${lostName}が消え、代わりに${gained?gained.name:'何か'}を授かった。` : `${gained?gained.name:'何か'}を授かった。`;
-    }},
-    {label:'関わらずに立ち去る', apply:()=>'老人は静かに微笑み、去っていった。'},
+  {id:'ev_librarian', title:'古の司書', desc:'ページの擦り切れた本を抱えた老人が、静かに問いかけてくる。', image:'', slots:2, weight:1, choices:[
+    {label:'知識と引き換える', result:'老人は古い頁をめくり、知識を授けた。', hideEffects:false, always:false, effects:[{kind:'removeCard',mode:'random',rarity:'basic',tag:'',count:1},{kind:'gainCard',source:'random',cardId:'',rarity:'uncommon+',tag:'',count:1}]},
+    {label:'関わらずに立ち去る', result:'老人は静かに微笑み、去っていった。', hideEffects:false, always:false, effects:[]},
   ]},
-  {title:'迷える巡礼者', desc:'傷ついた巡礼者が道端に座り込んでいる。', choices:[
-    {label:'治療を手伝う（HP-5 / 自動ブロック+1 永続）', apply:(r)=>{ r.player.hp=Math.max(1,r.player.hp-5); r.player.permMetallicize+=1; return '巡礼者から加護の言葉を授かった。'; }},
-    {label:'先を急ぐ（道中で15ゴールドを見つける）', apply:(r)=>{ r.player.gold+=15; return '先を急いだ道中、落し物のゴールドを見つけた。'; }},
+  {id:'ev_pilgrim', title:'迷える巡礼者', desc:'傷ついた巡礼者が道端に座り込んでいる。', image:'', slots:2, weight:1, choices:[
+    {label:'治療を手伝う', result:'巡礼者から加護の言葉を授かった。', hideEffects:false, always:false, effects:[{kind:'hp',amount:-5},{kind:'permMetallicize',amount:1}]},
+    {label:'先を急ぐ', result:'先を急いだ道中、落し物のゴールドを見つけた。', hideEffects:false, always:false, effects:[{kind:'gold',amount:15}]},
   ]},
-  {title:'巡回の鍛冶屋', desc:'寡黙な鍛冶屋が、道具一式を広げて座っている。', choices:[
-    {label:'カードを1枚鍛え直してもらう（デッキからランダムに1枚を無料で強化）', apply:(r)=>{
-      const eligible = ownedCardInstances(r).filter(x=>!isUpgradedInstanceId(x.cid));
-      if(eligible.length===0) return '強化できるカードが見当たらなかった。';
-      const inst = eligible[Math.floor(Math.random()*eligible.length)];
-      const name = cardById(inst.cid).name;
-      r[inst.pile][inst.i] = upgradeRawId(inst.cid);
-      return `${name}が鍛え直され、${name}+になった。`;
-    }},
-    {label:'礼を言って立ち去る（15ゴールド獲得）', apply:(r)=>{ r.player.gold+=15; return '鍛冶屋から餞別を受け取った。'; }},
+  {id:'ev_smith', title:'巡回の鍛冶屋', desc:'寡黙な鍛冶屋が、道具一式を広げて座っている。', image:'', slots:2, weight:1, choices:[
+    {label:'カードを1枚鍛え直してもらう', result:'鍛冶屋は黙々と槌を振るった。', hideEffects:false, always:false, effects:[{kind:'upgradeCard',mode:'random',rarity:'any',tag:'',count:1}]},
+    {label:'礼を言って立ち去る', result:'鍛冶屋から餞別を受け取った。', hideEffects:false, always:false, effects:[{kind:'gold',amount:15}]},
   ]},
 ];
 
-function renderEvent(){
+/* ---------- text describing an effect ---------- */
+function evFilterText(eff, forGain){
+  const parts = [];
+  if(eff.rarity && eff.rarity!=='any') parts.push(evRarityLabel(eff.rarity));
+  if(eff.tag) parts.push(`[${eff.tag}]`);
+  return parts.join('');
+}
+function eventEffectText(eff){
+  const k = eff.kind;
+  if(EV_NUM[k]) return EV_NUM[k].text(eff.amount|0);
+  const cnt = (eff.count|0) || 1;
+  const f = evFilterText(eff);
+  const how = eff.mode==='choose' ? '選択' : 'ランダム';
+  if(k==='nextCustom'){
+    const st = (S.customStatuses||[]).find(x=>x.id===eff.statusId);
+    if(!st) return '（存在しないカスタム状態）';
+    return `${st.emoji||''}${st.name}${eff.amount|0}（次の戦闘のみ・${st.target==='opponent'?'敵に':'自分に'}）`;
+  }
+  if(k==='gainCard'){
+    if(eff.source==='specific'){
+      const c = S.cards.find(x=>x.id===eff.cardId);
+      return `カード「${c?c.name:'？'}」を${cnt}枚入手`;
+    }
+    return `${f?f+'の':''}ランダムなカードを${cnt}枚入手`;
+  }
+  if(k==='removeCard') return `${f?f+'の':''}カードを${cnt}枚失う（${how}）`;
+  if(k==='upgradeCard') return `${f?f+'の':''}カードを${cnt}枚強化（${how}）`;
+  if(k==='duplicateCard') return `${f?f+'の':''}カードを${cnt}枚複製（${how}）`;
+  if(k==='gainRelic'){
+    if(eff.source==='specific'){
+      const rel = S.relics.find(x=>x.id===eff.relicId);
+      return `レリック「${rel?rel.name:'？'}」を入手`;
+    }
+    return `${eff.rarity&&eff.rarity!=='any' ? evRarityLabel(eff.rarity)+'の' : ''}ランダムなレリックを入手`;
+  }
+  return '';
+}
+function eventChoiceGoldNeed(ch){
+  return (ch.effects||[]).reduce((s,e)=> (e.kind==='gold' && (e.amount|0)<0) ? s-(e.amount|0) : s, 0);
+}
+
+/* ---------- running an event ---------- */
+function pickEventForRun(){
+  const valid = (S.events||[]).filter(ev=>ev && Array.isArray(ev.choices) && ev.choices.length);
+  const pool = valid.length ? valid : DEFAULT_EVENTS;
+  const total = pool.reduce((s,ev)=> s + (ev.weight||1), 0);
+  let x = Math.random()*total, ev = pool[pool.length-1];
+  for(const cand of pool){ x -= (cand.weight||1); if(x<=0){ ev = cand; break; } }
+  const slots = clampInt(ev.slots,1,3,2);
+  const idxs = ev.choices.map((c,i)=>i);
+  const always = idxs.filter(i=>ev.choices[i].always).slice(0,slots);
+  const rest = shuffle(idxs.filter(i=>!always.includes(i)));
+  const picked = always.concat(rest.slice(0, slots-always.length)).sort((a,b)=>a-b);
+  return {
+    id: ev.id, title: ev.title, desc: ev.desc||'', image: ev.image||'',
+    choices: picked.map(i=> JSON.parse(JSON.stringify(ev.choices[i]))),
+  };
+}
+
+function eventDeckCandidates(r, eff){
+  return ownedCardInstances(r).filter(x=>{
+    const {iid} = splitInstanceId(x.cid);
+    if(iid && r.temporaryCardIids && r.temporaryCardIids[iid]) return false;
+    const c = cardById(x.cid);
+    if(!c) return false;
+    if(!evRarityOk(c.rarity, eff.rarity, false)) return false;
+    if(eff.tag && !(c.tags && c.tags.includes(eff.tag))) return false;
+    if(eff.kind==='upgradeCard' && isUpgradedInstanceId(x.cid)) return false;
+    return true;
+  });
+}
+function eventDeckOpApply(r, eff, chosen){
+  const L = s=> r.eventLog.push(s);
+  if(!chosen.length){ L('対象となるカードがなかった。'); return; }
+  const names = chosen.map(x=> cardById(x.cid).name);
+  if(eff.kind==='removeCard'){
+    const byPile = {};
+    chosen.forEach(x=>{ (byPile[x.pile] = byPile[x.pile] || []).push(x.i); });
+    Object.keys(byPile).forEach(p=> byPile[p].sort((a,b)=>b-a).forEach(i=> r[p].splice(i,1)));
+    L(`失ったカード: ${names.join('、')}`);
+  } else if(eff.kind==='upgradeCard'){
+    chosen.forEach(x=>{ r[x.pile][x.i] = upgradeRawId(x.cid); });
+    L(`強化: ${names.map(n=>`${n}→${n}+`).join('、')}`);
+  } else if(eff.kind==='duplicateCard'){
+    chosen.forEach(x=>{ r.discard.push(splitInstanceId(x.cid).cid); });
+    L(`複製: ${names.join('、')}`);
+  }
+}
+
+function applyEventEffect(r, eff){
+  const p = r.player, k = eff.kind, a = eff.amount|0;
+  const L = s=> r.eventLog.push(s);
+  if(k==='hp'){
+    const before = p.hp;
+    p.hp = a>=0 ? Math.min(p.maxHp, p.hp + a) : Math.max(1, p.hp + a);
+    const d = p.hp - before;
+    L(d===0 ? (a<0 ? 'HPは1未満にならないため、変化しなかった。' : 'HPは既に最大だった。') : `HP${evSgn(d)}`);
+  } else if(k==='maxHp'){
+    p.maxHp = Math.max(1, p.maxHp + a);
+    if(a>0) p.hp = Math.min(p.maxHp, p.hp + a); else p.hp = Math.min(p.hp, p.maxHp);
+    L(`最大HP${evSgn(a)}`);
+  } else if(k==='gold'){
+    const before = p.gold;
+    p.gold = Math.max(0, p.gold + a);
+    L(`ゴールド${evSgn(p.gold - before)}`);
+  } else if(['permStrength','permDexterity','permMetallicize','permThorns','extraRewardChoices','rerollTokens'].includes(k)){
+    p[k] = (p[k]||0) + a;
+    L(eventEffectText(eff));
+  } else if(k==='extraEnergy'){
+    p.extraEnergy = Math.max(1 - S.settings.energyPerTurn, (p.extraEnergy||0) + a);
+    L(eventEffectText(eff));
+  } else if(k==='extraDraw'){
+    p.extraDraw = Math.max(1 - S.settings.handSize, (p.extraDraw||0) + a);
+    L(eventEffectText(eff));
+  } else if(EV_NEXT_PLAYER[k] || EV_NEXT_ENEMY[k] || k==='nextCustom'){
+    if(a<=0) return;
+    const nc = r.nextCombat = r.nextCombat || {p:{}, e:{}, cp:{}, ce:{}};
+    if(EV_NEXT_PLAYER[k]){ const f = EV_NEXT_PLAYER[k]; nc.p[f] = (nc.p[f]||0) + a; }
+    else if(EV_NEXT_ENEMY[k]){ const f = EV_NEXT_ENEMY[k]; nc.e[f] = (nc.e[f]||0) + a; }
+    else {
+      const st = (S.customStatuses||[]).find(x=>x.id===eff.statusId);
+      if(!st) return;
+      const bag = st.target==='opponent' ? nc.ce : nc.cp;
+      bag[st.id] = (bag[st.id]||0) + a;
+    }
+    L(eventEffectText(eff));
+  } else if(k==='gainCard'){
+    const cnt = (eff.count|0) || 1;
+    let pool;
+    if(eff.source==='specific'){ const c = S.cards.find(x=>x.id===eff.cardId); pool = c ? [c] : []; }
+    else pool = S.cards.filter(c=> !c.generatedOnly && c.usableBy!=='enemy' && c.rarity!=='enemy'
+      && evRarityOk(c.rarity, eff.rarity, true) && (!eff.tag || (c.tags||[]).includes(eff.tag)));
+    if(!pool.length){ L('入手できるカードが見当たらなかった。'); return; }
+    const got = [];
+    for(let i=0;i<cnt;i++){ const c = pool[Math.floor(Math.random()*pool.length)]; r.discard.push(c.id); got.push(c.name); }
+    L(`入手したカード: ${got.join('、')}`);
+  } else if(k==='gainRelic'){
+    let relic = null;
+    const owned = p.relics || [];
+    if(eff.source==='specific'){
+      relic = S.relics.find(x=>x.id===eff.relicId) || null;
+      if(relic && owned.includes(relic.id)) relic = null;
+    } else {
+      const pool = S.relics.filter(x=> !owned.includes(x.id) && evRarityOk(x.rarity, eff.rarity, false));
+      relic = pool.length ? pool[Math.floor(Math.random()*pool.length)] : null;
+    }
+    if(!relic){ L('入手できるレリックがなかった。'); return; }
+    applyRelicEffect(r, relic);
+    L(`レリック入手: ${relic.name}（${relicDescription(relic)}）`);
+  }
+}
+
+// Effects run one after another. A deck operation set to "choose" pauses the queue and
+// shows a card picker; everything else resolves immediately.
+function processEventQueue(){
   const r = S.run;
-  if(!r.currentEvent){ r.currentEvent = EVENT_TEMPLATES[Math.floor(Math.random()*EVENT_TEMPLATES.length)]; r.eventResult = null; }
-  const ev = r.currentEvent;
+  while(r.eventQueue.length){
+    const eff = r.eventQueue.shift();
+    if(EV_DECK_OPS.includes(eff.kind)){
+      const cands = eventDeckCandidates(r, eff);
+      const cnt = Math.min((eff.count|0)||1, cands.length);
+      if(cands.length===0){ r.eventLog.push('対象となるカードがなかった。'); continue; }
+      if(eff.mode==='choose' && cands.length>cnt){
+        r.eventPick = {eff, need:cnt, cands, selected:[]};
+        renderEventPick();
+        return;
+      }
+      eventDeckOpApply(r, eff, eff.mode==='choose' ? cands : shuffle(cands).slice(0,cnt));
+      continue;
+    }
+    applyEventEffect(r, eff);
+  }
+  r.eventResult = {text: (r.eventChoice && r.eventChoice.result) || '', lines: r.eventLog.slice()};
+  r.eventPick = null;
+  renderEvent();
+}
+
+function applyNextCombatEffects(r){
+  const nc = r.nextCombat;
+  if(!nc) return;
+  r.nextCombat = null;
+  const p = r.player, e = r.enemy;
+  Object.keys(nc.p||{}).forEach(f=>{ p[f] = (p[f]||0) + nc.p[f]; });
+  Object.keys(nc.e||{}).forEach(f=>{ e[f] = (e[f]||0) + nc.e[f]; });
+  Object.keys(nc.cp||{}).forEach(id=> addCustomStatusStacks(p, id, nc.cp[id]));
+  Object.keys(nc.ce||{}).forEach(id=> addCustomStatusStacks(e, id, nc.ce[id]));
+  pushLog('イベントの効果がこの戦闘に反映された。');
+}
+
+function renderEventPick(){
+  const r = S.run, pk = r.eventPick, eff = pk.eff;
+  const verb = {removeCard:'失う', upgradeCard:'強化する', duplicateCard:'複製する'}[eff.kind] || '選ぶ';
   app().innerHTML = `
   <div class="screen center-screen">
     <p class="eyebrow">EVENT</p>
-    <h2>${ev.title}</h2>
-    <p style="color:var(--parchment-dim); max-width:440px; margin:10px auto;">${ev.desc}</p>
-    <p style="font-size:13px; color:var(--gold);">所持ゴールド: ${r.player.gold}</p>
-    ${r.eventResult ? `
-      <p style="margin-top:20px; color:var(--parchment);">${r.eventResult}</p>
+    <h2>${escapeHtml(r.currentEvent.title)}</h2>
+    <p style="color:var(--parchment-dim); margin:10px 0;">${verb}カードを${pk.need}枚選んでください（${pk.selected.length} / ${pk.need}）</p>
+    <div class="reward-row" id="ev-pick-row">
+      ${pk.cands.map((x,i)=>{
+        const c = cardById(x.cid);
+        const on = pk.selected.includes(i);
+        return `<div data-idx="${i}" style="cursor:pointer; ${on?'outline:3px solid var(--gold); border-radius:10px;':''}">${renderCardHTML(c,{mini:true})}</div>`;
+      }).join('')}
+    </div>
+    <button class="primary" id="btn-ev-pick" ${pk.selected.length!==pk.need?'disabled':''}>決定</button>
+  </div>`;
+  qsa('#ev-pick-row > div').forEach(wrap=>{
+    wrap.onclick = ()=>{
+      const i = parseInt(wrap.dataset.idx,10);
+      const pos = pk.selected.indexOf(i);
+      if(pos>=0) pk.selected.splice(pos,1);
+      else if(pk.selected.length < pk.need) pk.selected.push(i);
+      renderEventPick();
+    };
+  });
+  qs('#btn-ev-pick').onclick = ()=>{
+    if(pk.selected.length!==pk.need) return;
+    eventDeckOpApply(r, eff, pk.selected.map(i=>pk.cands[i]));
+    r.eventPick = null;
+    processEventQueue();
+  };
+}
+
+function renderEvent(){
+  const r = S.run, p = r.player;
+  if(!r.currentEvent){
+    r.currentEvent = pickEventForRun();
+    r.eventResult = null; r.eventLog = []; r.eventQueue = []; r.eventPick = null; r.eventChoice = null;
+  }
+  if(r.eventPick){ renderEventPick(); return; }
+  const ev = r.currentEvent;
+  const res = r.eventResult;
+  app().innerHTML = `
+  <div class="screen center-screen">
+    <p class="eyebrow">EVENT</p>
+    <h2>${escapeHtml(ev.title)}</h2>
+    ${ev.image ? `<img class="ev-image" src="${ev.image}" alt="">` : ''}
+    <p style="color:var(--parchment-dim); max-width:440px; margin:10px auto; white-space:pre-wrap;">${escapeHtml(ev.desc)}</p>
+    <p style="font-size:13px; color:var(--gold);">HP ${p.hp} / ${p.maxHp} ・ 所持ゴールド: ${p.gold}</p>
+    ${res ? `
+      ${res.text ? `<p style="margin-top:20px; color:var(--parchment); white-space:pre-wrap;">${escapeHtml(res.text)}</p>` : ''}
+      ${res.lines.length ? `<div class="ev-result-lines">${res.lines.map(l=>`<div>${escapeHtml(l)}</div>`).join('')}</div>` : ''}
+      ${(!res.text && !res.lines.length) ? `<p style="margin-top:20px; color:var(--parchment);">何も起こらなかった。</p>` : ''}
       <div style="margin-top:22px;"><button class="primary" id="btn-event-continue">先へ進む</button></div>
     ` : `
       <div style="display:flex; flex-direction:column; gap:10px; max-width:420px; margin:24px auto 0;">
-        ${ev.choices.map((c,i)=>`<button class="ghost event-choice" data-idx="${i}" ${c.cost && r.player.gold<c.cost ? 'disabled':''}>${c.label}</button>`).join('')}
+        ${ev.choices.map((c,i)=>{
+          const need = eventChoiceGoldNeed(c);
+          const short = need > p.gold;
+          const fx = c.hideEffects ? '' : (c.effects||[]).map(eventEffectText).join(' ／ ');
+          return `<button class="ghost event-choice" data-idx="${i}" ${short?'disabled':''}>
+            <span>${escapeHtml(c.label)}</span>
+            ${fx || short ? `<span class="ev-fx">${escapeHtml(fx)}${short?`${fx?' ':''}（ゴールドが足りない）`:''}</span>` : ''}
+          </button>`;
+        }).join('')}
       </div>
     `}
   </div>`;
-  if(!r.eventResult){
+  if(!res){
     qsa('.event-choice').forEach(btn=>{
       btn.onclick = ()=>{
         const choice = ev.choices[parseInt(btn.dataset.idx,10)];
-        r.eventResult = choice.apply(r) || '何も起こらなかった。';
-        renderEvent();
+        r.eventChoice = choice;
+        r.eventLog = [];
+        r.eventQueue = (choice.effects||[]).map(x=>({...x}));
+        processEventQueue();
       };
     });
   } else {
     qs('#btn-event-continue').onclick = ()=>{
-      r.currentEvent = null; r.eventResult = null;
+      r.currentEvent = null; r.eventResult = null; r.eventChoice = null; r.eventLog = []; r.eventQueue = [];
       r.floor++; beginFloor();
     };
+  }
+}
+
+/* ---------- event editor: list ---------- */
+function renderEventEditor(){
+  let html = `
+  <div class="screen">
+    <div class="topbar">
+      <div><p class="eyebrow">EVENT EDITOR</p><h2>イベントを編集する</h2></div>
+      <button class="ghost" id="btn-back">← ホームへ</button>
+    </div>
+    <p class="ev-hint">イベントは、探索の途中で休憩所・ショップと並んでランダムに登場します。</p>
+    <div class="editor-grid">`;
+  S.events.forEach(ev=>{
+    html += `<div class="editor-card-wrap" data-id="${escapeHtml(ev.id)}">
+      <div class="card mini" style="cursor:default;">
+        <div class="banner" style="background:linear-gradient(90deg,#5a6a8a,#26304a);"><div class="name">${escapeHtml(ev.title)}</div></div>
+        <div class="art">${artHTML(ev.image, '📜')}</div>
+        <div class="desc">選択肢${ev.slots}枠・候補${ev.choices.length}件・重み${ev.weight}</div>
+      </div>
+      <div class="edit-actions">
+        <button class="edit-event-btn">編集</button>
+        <button class="del-event-btn">削除</button>
+      </div>
+    </div>`;
+  });
+  html += `<div class="add-card-tile" id="btn-add-event">＋</div></div></div>`;
+  app().innerHTML = html;
+  qs('#btn-back').onclick = ()=>{ S.screen='home'; renderHome(); };
+  qsa('.edit-event-btn').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.closest('.editor-card-wrap').dataset.id;
+      openEventForm(S.events.find(x=>x.id===id), false);
+    };
+  });
+  qsa('.del-event-btn').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.closest('.editor-card-wrap').dataset.id;
+      if(S.events.length<=1){ alert('イベントが1つもなくなってしまうため削除できません。'); return; }
+      if(confirm('このイベントを削除しますか？')){
+        S.events = S.events.filter(x=>x.id!==id);
+        saveEvents(S.events);
+        renderEventEditor();
+      }
+    };
+  });
+  qs('#btn-add-event').onclick = ()=>{
+    openEventForm({id:newId(), title:'新しいイベント', desc:'', image:'', slots:2, weight:1,
+      choices:[newEventChoice('選択肢1'), newEventChoice('選択肢2')]}, true);
+  };
+}
+
+/* ---------- event editor: form ---------- */
+const evFormState = {draft:null, isNew:false};
+function openEventForm(ev, isNew){
+  evFormState.draft = JSON.parse(JSON.stringify(ev));
+  evFormState.isNew = isNew;
+  renderEventForm();
+  window.scrollTo(0,0);
+}
+function evOpts(list, cur){
+  return list.map(o=>`<option value="${escapeHtml(o.key)}" ${o.key===cur?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+}
+function evEffectFieldsHTML(eff, ci, ei){
+  const at = `data-ci="${ci}" data-ei="${ei}"`;
+  const k = eff.kind;
+  const numIn = (f,label,min,max,val)=>`<div><label>${label}</label><input type="number" ${at} data-f="${f}" data-num="1" value="${val}" min="${min}" max="${max}"></div>`;
+  const tagIn = `<div><label>タグ（空欄で絞り込みなし）</label><input type="text" ${at} data-f="tag" value="${escapeHtml(eff.tag||'')}"></div>`;
+  const rarSel = (opts)=>`<div><label>レアリティ</label><select ${at} data-f="rarity">${evOpts(opts, eff.rarity||'any')}</select></div>`;
+  if(EV_NUM[k]){
+    const s = !!EV_NUM[k].signed;
+    return `<div class="ev-eff-grid">${numIn('amount', s?'数値（マイナスで減少）':'数値', s?-999:0, 999, eff.amount|0)}</div>`;
+  }
+  if(k==='nextCustom'){
+    const list = S.customStatuses||[];
+    if(!list.length) return `<p class="ev-hint">カスタム状態がまだありません。先に「カスタム状態を編集」で作成してください。</p>`;
+    if(!eff.statusId || !list.some(x=>x.id===eff.statusId)) eff.statusId = list[0].id;
+    return `<div class="ev-eff-grid">
+      <div><label>状態</label><select ${at} data-f="statusId">${list.map(st=>`<option value="${escapeHtml(st.id)}" ${st.id===eff.statusId?'selected':''}>${escapeHtml((st.emoji||'')+st.name+(st.target==='opponent'?'（敵に付与）':'（自分に付与）'))}</option>`).join('')}</select></div>
+      ${numIn('amount','数値',0,999,eff.amount|0)}</div>`;
+  }
+  if(k==='gainCard'){
+    const cards = S.cards.filter(c=>c.usableBy!=='enemy' && c.rarity!=='enemy').sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+    if(eff.source==='specific' && cards.length && !cards.some(c=>c.id===eff.cardId)) eff.cardId = cards[0].id;
+    return `<div class="ev-eff-grid">
+      <div><label>入手方法</label><select ${at} data-f="source" data-rerender="1">
+        <option value="random" ${eff.source!=='specific'?'selected':''}>ランダム</option>
+        <option value="specific" ${eff.source==='specific'?'selected':''}>カードを指定</option></select></div>
+      ${eff.source==='specific'
+        ? `<div><label>カード</label><select ${at} data-f="cardId">${cards.map(c=>`<option value="${escapeHtml(c.id)}" ${c.id===eff.cardId?'selected':''}>${escapeHtml(c.name)}</option>`).join('')}</select></div>`
+        : rarSel(EV_RARITY_OPTIONS) + tagIn}
+      ${numIn('count','枚数',1,20,eff.count|0||1)}</div>
+      ${eff.source!=='specific' ? `<p class="ev-hint">「指定なし」はベーシック以外のカードから選ばれます。</p>` : ''}`;
+  }
+  if(k==='gainRelic'){
+    const rels = S.relics.slice();
+    if(eff.source==='specific' && rels.length && !rels.some(x=>x.id===eff.relicId)) eff.relicId = rels[0].id;
+    return `<div class="ev-eff-grid">
+      <div><label>入手方法</label><select ${at} data-f="source" data-rerender="1">
+        <option value="random" ${eff.source!=='specific'?'selected':''}>ランダム（未所持のもの）</option>
+        <option value="specific" ${eff.source==='specific'?'selected':''}>レリックを指定</option></select></div>
+      ${eff.source==='specific'
+        ? `<div><label>レリック</label><select ${at} data-f="relicId">${rels.map(x=>`<option value="${escapeHtml(x.id)}" ${x.id===eff.relicId?'selected':''}>${escapeHtml(x.name)}</option>`).join('')}</select></div>`
+        : rarSel(EV_RARITY_OPTIONS.filter(o=>o.key!=='basic'))}</div>`;
+  }
+  // deck operations: remove / upgrade / duplicate
+  return `<div class="ev-eff-grid">
+    <div><label>対象の決め方</label><select ${at} data-f="mode">
+      <option value="random" ${eff.mode!=='choose'?'selected':''}>ランダム</option>
+      <option value="choose" ${eff.mode==='choose'?'selected':''}>プレイヤーが選ぶ</option></select></div>
+    ${rarSel(EV_RARITY_OPTIONS)}${tagIn}
+    ${numIn('count','枚数',1,20,eff.count|0||1)}</div>
+    <p class="ev-hint">対象がデッキに足りない場合は、あるぶんだけ実行されます。</p>`;
+}
+function evChoiceHTML(ch, ci){
+  const at = `data-ci="${ci}"`;
+  const addOptions = EV_GROUPS.map(g=>`<optgroup label="${escapeHtml(g[0])}">${g[1].map(k=>`<option value="${k}">${escapeHtml(evKindLabel(k))}</option>`).join('')}</optgroup>`).join('');
+  return `<div class="ev-choice">
+    <div class="ev-choice-head"><b>候補 ${ci+1}</b><button class="ghost" data-act="del-choice" ${at}>この候補を削除</button></div>
+    <div class="field"><label>選択肢の文章（ボタンに表示）</label><input type="text" ${at} data-f="label" value="${escapeHtml(ch.label)}"></div>
+    <div class="field"><label>結果の文章（選んだあとに表示）</label><textarea rows="2" ${at} data-f="result">${escapeHtml(ch.result||'')}</textarea></div>
+    <div class="checkbox-field"><input type="checkbox" id="ev-al-${ci}" ${at} data-f="always" ${ch.always?'checked':''}><label for="ev-al-${ci}">必ず出す（枠に優先して入る）</label></div>
+    <div class="checkbox-field"><input type="checkbox" id="ev-hd-${ci}" ${at} data-f="hideEffects" ${ch.hideEffects?'checked':''}><label for="ev-hd-${ci}">効果を伏せる（選ぶ前に効果を表示しない）</label></div>
+    <div class="ev-sub">効果（上から順に実行されます）</div>
+    ${ch.effects.length===0 ? `<p class="ev-hint">効果なし（何も起こらない選択肢）</p>` : ''}
+    ${ch.effects.map((eff,ei)=>`
+      <div class="ev-eff">
+        <div class="ev-eff-head"><span>${escapeHtml(evKindHeader(eff.kind))}</span><button class="ghost" data-act="del-effect" ${at} data-ei="${ei}">削除</button></div>
+        ${evEffectFieldsHTML(eff, ci, ei)}
+      </div>`).join('')}
+    <div class="ev-add"><select id="ev-addk-${ci}">${addOptions}</select><button data-act="add-effect" ${at}>＋ 効果を追加</button></div>
+  </div>`;
+}
+function renderEventForm(){
+  const d = evFormState.draft;
+  const scrollY = window.scrollY;
+  app().innerHTML = `
+  <div class="screen ev-form">
+    <div class="topbar">
+      <div><p class="eyebrow">EVENT EDITOR</p><h2>${evFormState.isNew ? 'イベントを新規作成' : 'イベントを編集'}</h2></div>
+      <div style="display:flex; gap:8px;"><button class="ghost" data-act="cancel">キャンセル</button><button class="primary" data-act="save">保存する</button></div>
+    </div>
+    <div class="settings-card ev-card">
+      <div class="field"><label>タイトル</label><input type="text" data-f="title" value="${escapeHtml(d.title)}"></div>
+      <div class="field"><label>本文</label><textarea rows="4" data-f="desc">${escapeHtml(d.desc||'')}</textarea></div>
+      <div class="field"><label>画像（任意。イベント画面の本文の上に表示されます）</label>${imageFieldHTML('ev', d.image)}
+        <p class="hint">大きい画像は自動で縮小されます。動くGIFは静止画になります。</p></div>
+      <div class="row">
+        <div class="field"><label>選択肢の枠数</label>
+          <select data-f="slots" data-num="1">${[1,2,3].map(n=>`<option value="${n}" ${d.slots===n?'selected':''}>${n}つ</option>`).join('')}</select></div>
+        <div class="field"><label>出現の重み（大きいほど出やすい）</label><input type="number" data-f="weight" data-num="1" value="${d.weight}" min="1" max="20"></div>
+      </div>
+    </div>
+    <div class="section-label">選択肢の候補（${d.choices.length}件）</div>
+    <p class="ev-hint">イベントが登場するたび、候補の中から枠数ぶんがランダムに選ばれて表示されます。候補が枠数以下なら、すべて表示されます。</p>
+    ${d.choices.map(evChoiceHTML).join('')}
+    <button data-act="add-choice">＋ 選択肢の候補を追加</button>
+    <div class="modal-actions"><button class="ghost" data-act="cancel">キャンセル</button><button class="primary" data-act="save">保存する</button></div>
+  </div>`;
+  const root = qs('.ev-form');
+  bindImageField(root, 'ev', 640, ()=>d.image||'', v=>{ d.image = v; });
+  root.addEventListener('input', e=> evFormSync(e.target));
+  root.addEventListener('change', e=>{
+    evFormSync(e.target);
+    if(e.target.dataset && e.target.dataset.rerender) renderEventForm();
+  });
+  root.addEventListener('click', e=>{
+    const b = e.target.closest('[data-act]');
+    if(b) evFormAct(b, root);
+  });
+  window.scrollTo(0, scrollY);
+}
+function evFormSync(t){
+  const f = t.dataset && t.dataset.f;
+  if(!f) return;
+  const d = evFormState.draft;
+  let obj = d;
+  if(t.dataset.ci!==undefined){
+    obj = d.choices[parseInt(t.dataset.ci,10)];
+    if(obj && t.dataset.ei!==undefined) obj = obj.effects[parseInt(t.dataset.ei,10)];
+  }
+  if(!obj) return;
+  if(t.type==='checkbox') obj[f] = t.checked;
+  else if(t.dataset.num){ const v = parseInt(t.value,10); obj[f] = isNaN(v) ? 0 : v; }
+  else obj[f] = t.value;
+}
+function evFormAct(b, root){
+  const d = evFormState.draft;
+  const act = b.dataset.act;
+  const ci = b.dataset.ci!==undefined ? parseInt(b.dataset.ci,10) : -1;
+  if(act==='cancel'){ renderEventEditor(); return; }
+  if(act==='save'){
+    const ev = normalizeEvent(d);
+    if(evFormState.isNew) S.events.push(ev);
+    else S.events = S.events.map(x=> x.id===ev.id ? ev : x);
+    saveEvents(S.events);
+    renderEventEditor();
+    return;
+  }
+  if(act==='add-choice'){ d.choices.push(newEventChoice()); renderEventForm(); return; }
+  if(act==='del-choice'){
+    if(d.choices.length<=1){ alert('候補は最低1つ必要です。'); return; }
+    d.choices.splice(ci,1); renderEventForm(); return;
+  }
+  if(act==='add-effect'){
+    const sel = qs(`#ev-addk-${ci}`, root);
+    d.choices[ci].effects.push(newEventEffect(sel.value));
+    renderEventForm(); return;
+  }
+  if(act==='del-effect'){
+    d.choices[ci].effects.splice(parseInt(b.dataset.ei,10),1);
+    renderEventForm(); return;
   }
 }
 
@@ -3638,6 +4341,7 @@ async function boot(){
   S.customStatuses = loadCustomStatuses();
   S.enemies = loadEnemies();
   if(!S.enemies || S.enemies.length===0) S.enemies = DEFAULT_ENEMIES;
+  S.events = loadEvents();
   S.settings = loadSettings();
   S.screen='home';
   renderHome();
