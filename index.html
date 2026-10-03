@@ -351,6 +351,13 @@ const SETTING_TOGGLES = [
   {key:'tagFocusEnabled', label:'タグ指定リロール（狙い撃ち）を有効にする', def:true},
   {key:'skipTokenEnabled', label:'報酬をスキップするとリロールトークンを獲得する', def:true},
   {key:'shopRerollEnabled', label:'ショップの商品入れ替えを有効にする', def:true},
+  {key:'startPickEnabled', label:'ゲーム開始時に、カードを1枚選んでデッキに加える', def:false},
+  {key:'tagAffinityEnabled', label:'手に入れたカード（開始デッキを除く）と同じタグのカードが、報酬・ショップで出やすくなる', def:false},
+];
+// Numeric settings that go with the switches above.
+const SETTING_ACQ_NUMS = [
+  {key:'startPickChoices', label:'ゲーム開始時に提示するカードの枚数', def:3, min:1, max:10},
+  {key:'tagAffinityPct', label:'同じタグのカードを1枚手に入れるごとの、そのタグの出現率の上昇（%）', def:30, min:0, max:500},
 ];
 // Gold costs, adjustable for balance. Each is a whole number of gold.
 const SETTING_COSTS = [
@@ -375,6 +382,7 @@ const DEFAULT_SETTINGS = {
   enemyHpScalePct: 12, // % increase per floor
   restHealPct: 30,
   ...Object.fromEntries(SETTING_TOGGLES.map(t=>[t.key,t.def])),
+  ...Object.fromEntries(SETTING_ACQ_NUMS.map(c=>[c.key,c.def])),
   ...Object.fromEntries(SETTING_COSTS.map(c=>[c.key,c.def])),
 };
 
@@ -644,11 +652,12 @@ function cardDescription(c){
     const isGenerate = GENERATE_TYPES.includes(c.cardOp.type);
     const typeLabel = (CARDOP_TYPES.find(t=>t.key===c.cardOp.type)||{}).label || c.cardOp.type;
     const rangeLabel = isGenerate
-      ? ((GENERATE_POOL_OPTIONS.find(p=>p.key===c.cardOp.genPool)||{}).label || c.cardOp.genPool)
+      ? genPoolLabel(c.cardOp)
       : ((PILE_OPTIONS.find(p=>p.key===c.cardOp.fromPile)||{}).label || c.cardOp.fromPile);
     const seqText = (c.cardOp.sequential && c.cardOp.countMode!=='all') ? '（1枚ずつ選び直し）' : '';
     const countText = (c.cardOp.countMode==='all' ? '対象すべて'
-      : c.cardOp.countMode==='choose' ? `任意の${c.cardOp.countFixed}枚`
+      : (c.cardOp.countMode==='choose' && c.cardOp.type!=='generateToEnemyDeck') ? `任意の${c.cardOp.countFixed}枚`
+      : c.cardOp.countMode==='choose' ? `${c.cardOp.countFixed}枚`
       : c.cardOp.countMode==='random' ? `${c.cardOp.countMin}〜${c.cardOp.countMax}枚`
       : `${c.cardOp.countFixed}枚`) + seqText;
     const tagText = c.cardOp.filterTag ? `[${c.cardOp.filterTag}]の` : '';
@@ -658,7 +667,7 @@ function cardDescription(c){
       const amt = c.cardOp.buffAmount||0;
       parts.push(`${rangeLabel}の${tagText}カードを${countText}選び、「${fieldLabel}」を${amt>=0?'+':''}${amt}する`);
     } else if(isGenerate){
-      parts.push(`${rangeLabel}${tagText?`（${tagText.slice(0,-1)}）`:''}から${countText}${typeLabel}`);
+      parts.push(`${rangeLabel}${tagText?`（${tagText.slice(0,-1)}）`:''}から${countText}${typeLabel}${c.cardOp.type==='generateToEnemyDeck' ? `（重み${Math.max(1,c.cardOp.deckWeight||1)}）` : ''}`);
     } else {
       parts.push(`${rangeLabel}の${tagText}カードを${countText}${typeLabel}`);
     }
@@ -791,16 +800,18 @@ function normalizeRelic(r){
   if(!r.effect || typeof r.effect!=='object') r.effect = {};
   if(!RELIC_TIMINGS.some(t=>t.key===r.timing)) r.timing = 'onPickup';
   if(typeof r.triggerTag!=='string') r.triggerTag = '';
+  r.favorTag = typeof r.favorTag==='string' ? r.favorTag.trim() : '';
+  r.favorPct = clampInt(r.favorPct,0,1000,0);
   return r;
 }
 function defaultStatusOp(){
   return {enabled:true, type:'moveToDiscard', fromPile:'hand', genPool:'normal', countMode:'fixed',
-    countFixed:1, countMin:1, countMax:1, filterTag:'', buffField:'', buffAmount:0};
+    countFixed:1, countMin:1, countMax:1, filterTag:'', buffField:'', buffAmount:0, deckWeight:1};
 }
 function normalizeStatusOp(o){
   const d = defaultStatusOp();
   o = (o && typeof o==='object') ? o : {};
-  const okType = ['moveToHand','moveToDiscard','moveToDraw','moveToExhausted','upgrade','duplicate','grantBuff','generateToHand','generateToDraw'];
+  const okType = ['moveToHand','moveToDiscard','moveToDraw','moveToExhausted','upgrade','duplicate','grantBuff','generateToHand','generateToDraw','generateToEnemyDeck'];
   return {
     enabled:true,
     type: okType.includes(o.type) ? o.type : d.type,
@@ -813,6 +824,7 @@ function normalizeStatusOp(o){
     filterTag: typeof o.filterTag==='string' ? o.filterTag.trim() : '',
     buffField: typeof o.buffField==='string' ? o.buffField : '',
     buffAmount: clampInt(o.buffAmount,-99,99,0),
+    deckWeight: clampInt(o.deckWeight,1,99,1),
   };
 }
 function normalizeStatusEffect(x){
@@ -1203,6 +1215,8 @@ function renderSettings(){
       </div>
       <div class="section-label">カード獲得の補助（オン/オフ）</div>
       ${SETTING_TOGGLES.map(t=>`<div class="checkbox-field"><input type="checkbox" id="s-${t.key}" ${s[t.key]?'checked':''}><label for="s-${t.key}">${t.label}</label></div>`).join('')}
+      ${SETTING_ACQ_NUMS.map(c=>`<div class="field"><label>${c.label}</label><input type="number" id="s-${c.key}" value="${s[c.key]}" min="${c.min}" max="${c.max}"></div>`).join('')}
+      <p class="hint">開始時の取得は、報酬と同じ抽選（ベーシック以外）から選びます。タグの偏りは、報酬とショップの抽選に効きます（レリックで設定した偏りは、この設定がオフでも働きます）。</p>
       <div class="section-label">ゴールド消費量の調整</div>
       ${SETTING_COSTS.map(c=>`<div class="field"><label>${c.label}</label><input type="number" id="s-${c.key}" value="${s[c.key]}" min="0" max="${c.max}"></div>`).join('')}
       <p class="hint">0にすると無料になります。リロールトークンは、ゴールドの代わりに消費されます。</p>
@@ -1228,6 +1242,7 @@ function renderSettings(){
       enemyHpScalePct: clampInt(qs('#s-scale').value,0,200,12),
       restHealPct: clampInt(qs('#s-rest').value,0,100,30),
       ...Object.fromEntries(SETTING_TOGGLES.map(t=>[t.key, qs('#s-'+t.key).checked])),
+      ...Object.fromEntries(SETTING_ACQ_NUMS.map(c=>[c.key, clampInt(qs('#s-'+c.key).value,c.min,c.max,c.def)])),
       ...Object.fromEntries(SETTING_COSTS.map(c=>[c.key, clampInt(qs('#s-'+c.key).value,0,c.max,c.def)])),
     };
     saveSettings(S.settings);
@@ -1594,8 +1609,9 @@ const CARDOP_TYPES = [
   {key:'generateToHand', label:'カードを生成し、手札に加える'},
   {key:'generateToDraw', label:'カードを生成し、山札に加える'},
   {key:'generatePlay', label:'カードを生成し、コストを消費せず使用する'},
+  {key:'generateToEnemyDeck', label:'カードを生成し、敵のデッキに加える（この戦闘中のみ）'},
 ];
-const GENERATE_TYPES = ['generateToHand','generateToDraw','generatePlay'];
+const GENERATE_TYPES = ['generateToHand','generateToDraw','generatePlay','generateToEnemyDeck'];
 // Ops whose result normally only lasts for the current combat (reverted afterwards),
 // unless the op is flagged "permanent".
 const CARDOP_REVERTIBLE_TYPES = ['upgrade','duplicate','grantBuff','moveToExhausted','generateToHand','generateToDraw','generatePlay'];
@@ -1619,6 +1635,20 @@ const GENERATE_POOL_OPTIONS = [
   {key:'any', label:'すべてのカード'},
 ];
 
+// For "add to the enemy's deck" the pool is the cards an enemy is allowed to use
+// (usableBy enemy / both); the same three keys then mean:
+const ENEMY_DECK_POOL_OPTIONS = [
+  {key:'normal', label:'敵が使える通常のカードのみ（生成専用カードを除く）'},
+  {key:'exclusiveOnly', label:'敵が使える生成専用カードのみ（敵専用の攻撃・防御など）'},
+  {key:'any', label:'敵が使えるすべてのカード'},
+];
+function genPoolOptionsFor(opType){
+  return opType==='generateToEnemyDeck' ? ENEMY_DECK_POOL_OPTIONS : GENERATE_POOL_OPTIONS;
+}
+function genPoolLabel(op){
+  return (genPoolOptionsFor(op.type).find(p=>p.key===op.genPool)||{}).label || op.genPool;
+}
+
 // Every candidate a cardOp can act on is represented the same way, whether it comes
 // from an existing pile (pile+idx known, so it can be moved/mutated in place) or from
 // the master card list for a "generate" op (pile/idx are null — it doesn't exist yet).
@@ -1633,8 +1663,10 @@ function collectPileEntries(r, fromPileKey){
   return entries;
 }
 function collectGeneratePool(op){
+  const forEnemy = op.type==='generateToEnemyDeck';
   return S.cards.filter(c=>{
-    if(c.usableBy==='enemy') return false;
+    if(forEnemy){ if(c.usableBy!=='enemy' && c.usableBy!=='both') return false; }
+    else if(c.usableBy==='enemy') return false;
     if(op.filterTag && !(c.tags && c.tags.includes(op.filterTag))) return false;
     if(op.genPool==='exclusiveOnly') return !!c.generatedOnly;
     if(op.genPool==='normal') return !c.generatedOnly;
@@ -1663,6 +1695,8 @@ function pickWithReplacement(entries, count){
 // it as asynchronous and continue its own work from inside `done`.
 function resolveCardOp(r, op, done){
   if(!op || !op.enabled){ done(); return; }
+  // The player never picks which card goes into the enemy's deck: "choose" acts as "fixed".
+  if(op.type==='generateToEnemyDeck' && op.countMode==='choose') op = {...op, countMode:'fixed'};
 
   // "Re-pick one at a time": instead of choosing every target up front, pick one, resolve it,
   // then pick the next from the pile as it stands afterwards (so cards drawn/moved by the
@@ -1699,6 +1733,17 @@ function resolveCardOp(r, op, done){
 
   function finish(selected){
     if(selected.length===0){ done(); return; }
+
+    // Added to the enemy's list of possible moves for the rest of this battle. The enemy
+    // object is rebuilt for every battle, so nothing carries over. The move already
+    // shown as the intent is not changed; the new entries count from the next roll on.
+    if(op.type==='generateToEnemyDeck'){
+      const w = Math.max(1, op.deckWeight||1);
+      selected.forEach(e=>{ r.enemy.deck.push({cardId:e.rawId, weight:w, temp:true}); });
+      const names = selected.map(e=>{ const cc = cardById(e.rawId); return cc ? cc.name : e.rawId; });
+      pushLog(`${r.enemy.name}のデッキに「${names.join('」「')}」が加わった（重み${w}）。`);
+      done(); return;
+    }
 
     if(isGenerate){
       const newIds = selected.map(e=>{
@@ -2425,7 +2470,9 @@ function statusEffectFormHTML(eff, i){
       <p class="ev-hint">プレイヤーがこの状態を持っている間（スタック1以上）、自分のターン開始時（手札を引いた後）に発動します。敵が持っている間は発動しません。</p>
       <div class="field"><label>操作内容</label>${sel('type', STATUS_CARDOP_TYPES, op.type)}</div>
       ${isGen
-        ? `<div class="field"><label>生成元プール</label>${sel('genPool', GENERATE_POOL_OPTIONS, op.genPool)}</div>`
+        ? `<div class="field"><label>生成元プール</label>${sel('genPool', genPoolOptionsFor(op.type), op.genPool)}</div>
+           ${op.type==='generateToEnemyDeck' ? `<div class="ev-eff-grid"><div><label>敵のデッキでの重み（大きいほど選ばれやすい）</label><input type="number" ${opAt} data-f="deckWeight" data-num="1" value="${op.deckWeight||1}" min="1" max="99"></div></div>
+           <p class="ev-hint">敵のデッキ一覧に、この戦闘の間だけ追加されます。プレイヤーがこの状態を持っている間、ターン開始時に発動します。今の予告は変わらず、次の次の行動から反映されます。</p>` : ''}`
         : `<div class="field"><label>対象の山</label>${sel('fromPile', PILE_OPTIONS, op.fromPile)}</div>`}
       <div class="field"><label>枚数の決め方</label><select ${opAt} data-f="countMode">
         <option value="fixed" ${op.countMode==='fixed'?'selected':''}>固定数</option>
@@ -2558,6 +2605,12 @@ function openRelicModal(relic, isNew){
       <div id="rm-tag-field" style="${timing==='onTagCardUsed'?'':'display:none;'}">
         <div class="field"><label>発動条件（このタグのカードを使うたび。空欄でどのカードでも）</label><input type="text" id="rm-triggertag" value="${rel.triggerTag||''}"></div>
       </div>
+      <div class="section-label">カードの出現率（所持している間ずっと有効）</div>
+      <div class="row">
+        <div class="field"><label>出やすくするタグ（空欄で無効）</label><input type="text" id="rm-favortag" value="${escapeHtml(rel.favorTag||'')}"></div>
+        <div class="field"><label>出現率の上昇（%）</label><input type="number" id="rm-favorpct" value="${rel.favorPct||0}" min="0" max="1000"></div>
+      </div>
+      <p class="hint">カード報酬・ショップで、このタグのカードが出やすくなります。下の「効果」とは別に、持っている間ずっと働きます（例: 50%で、重みが1.5倍）。</p>
       <div class="section-label" id="rm-effect-label">${timing==='onPickup' ? '効果（入手時に一度だけ適用）' : '効果（このタイミングになるたび発動）'}</div>
       <p class="hint" id="rm-hint" style="margin-bottom:8px;${relicTimingHint(timing)?'':'display:none;'}">${relicTimingHint(timing)}</p>
       <div id="rm-effect-fields">${relicEffectFieldsHTML(timing, rel.effect)}</div>
@@ -2586,6 +2639,8 @@ function openRelicModal(relic, isNew){
       rarity: qs('#rm-rarity',overlay).value,
       timing: t,
       triggerTag: (qs('#rm-triggertag',overlay).value||'').trim(),
+      favorTag: (qs('#rm-favortag',overlay).value||'').trim(),
+      favorPct: clampInt(qs('#rm-favorpct',overlay).value,0,1000,0),
       effect: {},
     };
     relicFieldDefsFor(t).forEach(def=>{
@@ -2718,8 +2773,13 @@ function openCardModal(card, isNew){
         <div id="op-genpool-field" style="${c.cardOp&&GENERATE_TYPES.includes(c.cardOp.type)?'':'display:none;'}">
           <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">生成元プール</div>
           <select id="m-op-genpool" style="margin-bottom:8px; width:100%;">
-            ${GENERATE_POOL_OPTIONS.map(p=>`<option value="${p.key}" ${c.cardOp&&c.cardOp.genPool===p.key?'selected':''}>${p.label}</option>`).join('')}
+            ${genPoolOptionsFor(c.cardOp&&c.cardOp.type).map(p=>`<option value="${p.key}" ${c.cardOp&&c.cardOp.genPool===p.key?'selected':''}>${p.label}</option>`).join('')}
           </select>
+        </div>
+        <div id="op-deckweight-field" style="${c.cardOp&&c.cardOp.type==='generateToEnemyDeck'?'':'display:none;'}">
+          <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">敵のデッキでの重み（大きいほど選ばれやすい）</div>
+          <input type="number" id="m-op-deckweight" value="${(c.cardOp&&c.cardOp.deckWeight)||1}" min="1" max="99" style="width:100%; margin-bottom:4px;">
+          <div class="hint" style="margin-bottom:8px;">敵のデッキ一覧に、この戦闘の間だけ追加されます（戦闘が終わると消えます）。敵は毎ターン、デッキ一覧から3つを無作為に引き、その中から重みに比例して行動を選びます。枚数を増やすと一覧に入る数も増え、引かれやすくなります。今表示されている予告は変わらず、次の次の行動から反映されます。</div>
         </div>
         <div style="font-size:10px; color:var(--parchment-dim); margin-bottom:2px;">枚数の決め方</div>
         <select id="m-op-countmode" style="margin-bottom:8px; width:100%;">
@@ -2791,6 +2851,9 @@ function openCardModal(card, isNew){
     const isGen = GENERATE_TYPES.includes(t);
     qs('#op-frompile-field',overlay).style.display = isGen ? 'none' : 'block';
     qs('#op-genpool-field',overlay).style.display = isGen ? 'block' : 'none';
+    qs('#op-deckweight-field',overlay).style.display = t==='generateToEnemyDeck' ? 'block' : 'none';
+    const gp = qs('#m-op-genpool',overlay), cur = gp.value;
+    gp.innerHTML = genPoolOptionsFor(t).map(o=>`<option value="${o.key}" ${o.key===cur?'selected':''}>${o.label}</option>`).join('');
   };
   qs('#m-save',overlay).onclick = async ()=>{
     const updated = {
@@ -2851,6 +2914,7 @@ function openCardModal(card, isNew){
       sequential: qs('#m-op-sequential',overlay).checked,
       buffField: qs('#m-op-bufffield',overlay).value,
       buffAmount: clampInt(qs('#m-op-buffamount',overlay).value,-99,99,0),
+      deckWeight: clampInt(qs('#m-op-deckweight',overlay).value,1,99,1),
       permanent: qs('#m-op-permanent',overlay).checked,
     } : { enabled:false };
     if(isNew){ S.cards.push(updated); }
@@ -2877,6 +2941,29 @@ function buildStartingDeck(){
 
 // focusTag: cards carrying this tag get a much higher weight. onlyFocus: restrict the pool
 // to tagged cards entirely (when any exist), used to guarantee at least one targeted card.
+// Extra appearance weight (in %) per tag. Two sources, added together:
+//  - cards obtained during this run (starting deck excluded), when the setting is on
+//  - relics that name a favoured tag (always active while the relic is owned)
+function tagBonusPctMap(){
+  const map = {}, r = S.run;
+  if(!r) return map;
+  if(S.settings.tagAffinityEnabled){
+    const per = S.settings.tagAffinityPct||0;
+    (r.acquiredCardIds||[]).forEach(id=>{
+      const c = S.cards.find(x=>x.id===id);
+      ((c && c.tags) || []).forEach(t=>{ map[t] = (map[t]||0) + per; });
+    });
+  }
+  ((r.player && r.player.relics) || []).forEach(rid=>{
+    const rel = S.relics.find(x=>x.id===rid);
+    if(rel && rel.favorTag && rel.favorPct>0) map[rel.favorTag] = (map[rel.favorTag]||0) + rel.favorPct;
+  });
+  return map;
+}
+function noteCardAcquired(r, cardId){
+  if(!r.acquiredCardIds) r.acquiredCardIds = [];
+  r.acquiredCardIds.push(cardId);
+}
 function weightedPickCard(excludeIds, focusTag, onlyFocus){
   let pool = S.cards.filter(c=> c.rarity!=='basic' && c.rarity!=='enemy' && !c.generatedOnly && c.usableBy!=='enemy' && !excludeIds.includes(c.id));
   if(focusTag && onlyFocus){
@@ -2884,7 +2971,11 @@ function weightedPickCard(excludeIds, focusTag, onlyFocus){
     if(tagged.length) pool = tagged;
   }
   if(pool.length===0) return null;
-  const weightOf = (c)=> (RARITY_WEIGHT[c.rarity]||10) * ((focusTag && c.tags && c.tags.includes(focusTag)) ? 8 : 1);
+  const bonus = tagBonusPctMap();
+  const weightOf = (c)=>{
+    const pct = (c.tags||[]).reduce((sum,t)=> sum + (bonus[t]||0), 0);
+    return (RARITY_WEIGHT[c.rarity]||10) * ((focusTag && c.tags && c.tags.includes(focusTag)) ? 8 : 1) * (1 + pct/100);
+  };
   const total = pool.reduce((sum,c)=> sum + weightOf(c), 0);
   let x = Math.random()*total;
   for(const c of pool){
@@ -2988,7 +3079,8 @@ function makeEnemy(floorIndex){
   const runtimeEnemy = {
     name: t.name, emoji: t.emoji, image: t.image||'', elite: t.category==='elite', boss: t.category==='boss',
     hp, maxHp: hp, block:0, strength:0, dexterity:0, weak:0, vulnerable:0, poison:0, stun:0, thorns:0,
-    deck: t.deck && t.deck.length ? t.deck : [{cardId:'strike', weight:1}],
+    // copied, so cards added during the battle never touch the enemy's saved definition
+    deck: (t.deck && t.deck.length ? t.deck : [{cardId:'strike', weight:1}]).map(x=>({...x})),
     customStatus: {}, startEffect: t.startEffect || {},
   };
   runtimeEnemy.nextMoveId = rollEnemyMove(runtimeEnemy);
@@ -3037,10 +3129,50 @@ function startRun(){
     rewardFocusTag:'',
     shopRerollCount:0,
     nextCombat:null,
+    acquiredCardIds:[],
+    startPickChoices:null,
   };
   S.run.draw = shuffle(S.run.deck);
   S.run.deck = [];
+  if(S.settings.startPickEnabled){ S.screen='startPick'; renderStartPick(); return; }
   beginFloor();
+}
+
+// Optional pick-one-card screen before the first battle. The chosen card is added to the
+// draw pile and counts as "obtained" (unlike the fixed starting deck).
+function pickStartCard(id){
+  const r = S.run;
+  r.draw = shuffle([...r.draw, id]);
+  noteCardAcquired(r, id);
+  r.startPickChoices = null;
+  beginFloor();
+}
+function renderStartPick(){
+  const r = S.run;
+  if(!r.startPickChoices){
+    const n = Math.max(1, S.settings.startPickChoices||3);
+    const ids = [], used = [];
+    for(let i=0;i<n;i++){
+      const c = weightedPickCard(used);
+      if(!c) break;
+      ids.push(c.id); used.push(c.id);
+    }
+    r.startPickChoices = ids;
+  }
+  const choices = r.startPickChoices.map(id=>cardById(id)).filter(Boolean);
+  if(!choices.length){ r.startPickChoices = null; beginFloor(); return; }
+  app().innerHTML = `
+  <div class="screen center-screen">
+    <p class="eyebrow">PROLOGUE</p>
+    <h2>最初のカードを選べ</h2>
+    <p style="color:var(--parchment-dim); margin-top:6px;">1枚選んで、開始デッキに加える。</p>
+    <div class="reward-row" id="startpick-row">
+      ${choices.map((c,i)=>`<div data-idx="${i}">${renderCardHTML(c)}</div>`).join('')}
+    </div>
+  </div>`;
+  qsa('#startpick-row > div').forEach(wrap=>{
+    wrap.querySelector('.card').onclick = ()=> pickStartCard(choices[parseInt(wrap.dataset.idx,10)].id);
+  });
 }
 
 function pushLog(msg){
@@ -3229,11 +3361,13 @@ function playCard(handIdx){
   if(!c || c.cost > r.player.energy) return;
   r.player.energy -= c.cost;
 
+  // The played card leaves the hand BEFORE its effects resolve. Otherwise a hand-targeting
+  // card operation (discard / buff / upgrade / duplicate ...) could pick the card that is
+  // being played; and since buffing re-tags a card with a new instance id, the card would
+  // then end up both in the hand (buffed) and in the discard pile (original) — two copies.
+  r.hand.splice(handIdx,1);
+
   resolveCardPlayCore(r, c, ()=>{
-    // Remove by ID rather than the original handIdx: cardOp effects resolved above
-    // (draw/discard/etc.) may have shifted hand indices.
-    const finalIdx = r.hand.indexOf(cardId);
-    if(finalIdx>=0) r.hand.splice(finalIdx,1);
     if(c.exhaust){ r.exhausted.push(cardId); }
     else{ r.discard.push(cardId); }
 
@@ -3596,10 +3730,13 @@ function relicDescription(relic){
     if(v>0) parts.push(def.desc(v));
   });
   const timingLabel = (RELIC_TIMINGS.find(t=>t.key===timing)||{}).label || timing;
-  const body = parts.length ? parts.join('。')+'。' : '効果なし';
-  if(timing==='onPickup') return body;
+  const main = parts.length ? parts.join('。')+'。' : '';
+  // Favoured-tag bonus works for as long as the relic is owned, whatever its timing.
+  const favor = (relic.favorTag && relic.favorPct>0) ? `[${relic.favorTag}]のカードの出現率+${relic.favorPct}%（所持中ずっと）。` : '';
+  if(!main && !favor) return '効果なし';
+  if(timing==='onPickup' || !main) return main + favor;
   const tagPart = timing==='onTagCardUsed' ? (relic.triggerTag ? `[${relic.triggerTag}]の` : 'どの') : '';
-  return `【${timingLabel}】${tagPart}${body}`;
+  return `【${timingLabel}】${tagPart}${main}${favor}`;
 }
 
 const DEFAULT_RELICS = [
@@ -3988,7 +4125,7 @@ function applyEventEffect(r, eff){
       && evRarityOk(c.rarity, eff.rarity, true) && (!eff.tag || (c.tags||[]).includes(eff.tag)));
     if(!pool.length){ L('入手できるカードが見当たらなかった。'); return; }
     const got = [];
-    for(let i=0;i<cnt;i++){ const c = pool[Math.floor(Math.random()*pool.length)]; r.discard.push(c.id); got.push(c.name); }
+    for(let i=0;i<cnt;i++){ const c = pool[Math.floor(Math.random()*pool.length)]; r.discard.push(c.id); noteCardAcquired(r, c.id); got.push(c.name); }
     L(`入手したカード: ${got.join('、')}`);
   } else if(k==='gainRelic'){
     let relic = null;
@@ -4417,6 +4554,7 @@ function renderShop(){
         r.player.gold -= offer.price;
         offer.sold = true;
         r.discard.push(offer.cardId);
+        noteCardAcquired(r, offer.cardId);
         renderShop();
       };
     });
@@ -4483,6 +4621,8 @@ function renderReward(){
     <h2>戦利品を選べ</h2>
     <p style="color:var(--parchment-dim); margin-top:6px;">1枚選んでデッキに加えるか、スキップできる。</p>
     <p style="font-size:13px; color:var(--gold); margin-top:4px;">ゴールド +${r.lastGoldGained}（所持: ${r.player.gold}）${cfg.rewardRerollEnabled?` ・ リロールトークン: ${tokens}`:''}</p>
+    ${(()=>{ const m = tagBonusPctMap(); const ks = Object.keys(m).filter(k=>m[k]>0);
+      return ks.length ? `<p style="font-size:11px; color:var(--parchment-dim); margin-top:4px;">出やすいタグ: ${ks.map(k=>`[${escapeHtml(k)}] +${m[k]}%`).join('　')}</p>` : ''; })()}
     <div class="reward-row" id="reward-row">
       ${choices.map((c,i)=>`<div data-idx="${i}">${renderCardHTML(c)}</div>`).join('')}
     </div>
@@ -4502,6 +4642,7 @@ function renderReward(){
     wrap.querySelector('.card').onclick = ()=>{
       const idx = parseInt(wrap.dataset.idx,10);
       r.discard.push(choices[idx].id);
+      noteCardAcquired(r, choices[idx].id);
       finish();
     };
   });
